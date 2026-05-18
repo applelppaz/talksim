@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
-import { LANGUAGES, type Dialogue, type PronunciationEval, type SlotSelections, type TargetLanguage } from '../types';
+import {
+  DIFFICULTIES,
+  LANGUAGES,
+  type Difficulty,
+  type Dialogue,
+  type PronunciationEval,
+  type SlotSelections,
+  type TargetLanguage,
+} from '../types';
 import { evaluatePronunciation, generateDialogue } from '../lib/gemini';
 import { speak, speakSequence, stopSpeaking } from '../lib/tts';
 import { startRecognition, sttSupported, type RecognitionHandle } from '../lib/stt';
@@ -9,19 +17,22 @@ import { hasAnyKey } from '../lib/apiKeyManager';
 import { DialogueLineCard, renderedLineText } from '../components/DialogueLineCard';
 
 const EXAMPLES = [
-  'カフェでコーヒーを注文する。バリスタとサイズや甘さの相談をする。',
-  '空港のチェックインカウンターで荷物を預ける。座席を窓側に変更したい。',
-  'ホテルのフロントでチェックインする。Wi-Fiのパスワードと朝食の時間を尋ねる。',
-  '海外で道に迷った。通行人に最寄りの駅までの行き方を尋ねる。',
-  '初対面の同僚と自己紹介をして、出身地や趣味について雑談する。',
-  'レストランで料理を注文し、アレルギーについて確認する。',
+  'Ordering coffee at a café. The barista asks about size and sweetness.',
+  'Checking in luggage at an airport counter. You want a window seat.',
+  'Checking in at a hotel front desk. Asking about Wi-Fi and breakfast hours.',
+  'Lost in a foreign city. Asking a passerby for the way to the nearest station.',
+  'Meeting a new coworker for the first time. Small talk about hometowns and hobbies.',
+  'Ordering at a restaurant and asking about food allergies.',
+  'A job interview at a tech company. Discussing past projects and salary expectations.',
+  'Negotiating the price of a used car with a private seller.',
 ];
 
 type RecState = 'idle' | 'listening' | 'processing';
 
 export function DialoguePage() {
-  const { settings, dialogues, addDialogue } = useApp();
+  const { settings, setSettings, dialogues, addDialogue } = useApp();
   const [language, setLanguage] = useState<TargetLanguage>('en');
+  const [difficulty, setDifficultyLocal] = useState<Difficulty>(settings.difficulty);
   const [situation, setSituation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +62,15 @@ export function DialoguePage() {
     };
   }, []);
 
+  // Persist difficulty as user's last-used preference
+  const setDifficulty = useCallback(
+    (d: Difficulty) => {
+      setDifficultyLocal(d);
+      if (settings.difficulty !== d) setSettings({ ...settings, difficulty: d });
+    },
+    [settings, setSettings]
+  );
+
   // Reset role/eval state on new dialogue
   useEffect(() => {
     if (!dialogue) return;
@@ -75,11 +95,11 @@ export function DialoguePage() {
 
   const handleGenerate = useCallback(async () => {
     if (!situation.trim()) {
-      setError('シチュエーションを入力してください。');
+      setError('Please enter a situation.');
       return;
     }
     if (!hasAnyKey()) {
-      setError('Gemini APIキーが未設定です。設定ページから登録してください。');
+      setError('No Gemini API key is set. Register one in Settings.');
       return;
     }
     setError(null);
@@ -89,16 +109,16 @@ export function DialoguePage() {
     setPlayingAll(false);
     setPlayingLineId(null);
     try {
-      const result = await generateDialogue(situation.trim(), language);
+      const result = await generateDialogue(situation.trim(), language, difficulty);
       setDialogue(result);
       setSelections({});
       addDialogue(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '会話の生成に失敗しました。');
+      setError(err instanceof Error ? err.message : 'Failed to generate dialogue.');
     } finally {
       setLoading(false);
     }
-  }, [situation, language, addDialogue]);
+  }, [situation, language, difficulty, addDialogue]);
 
   const playLine = useCallback(
     async (lineId: string) => {
@@ -187,6 +207,7 @@ export function DialoguePage() {
     setDialogue(d);
     setSituation(d.situation);
     setLanguage(d.language);
+    setDifficulty(d.difficulty);
     setSelections({});
   };
 
@@ -224,7 +245,7 @@ export function DialoguePage() {
       } catch (err) {
         setRecErrors((prev) => ({
           ...prev,
-          [lineId]: err instanceof Error ? err.message : '評価に失敗しました。',
+          [lineId]: err instanceof Error ? err.message : 'Evaluation failed.',
         }));
       } finally {
         setRecState((prev) => ({ ...prev, [lineId]: 'idle' }));
@@ -239,7 +260,7 @@ export function DialoguePage() {
       if (!sttOk) {
         setRecErrors((prev) => ({
           ...prev,
-          [lineId]: 'このブラウザは音声認識に対応していません（Chrome / Edge を推奨）。',
+          [lineId]: 'Speech recognition is not available in this browser (Chrome or Edge recommended).',
         }));
         return;
       }
@@ -287,7 +308,7 @@ export function DialoguePage() {
   const startPractice = useCallback(() => {
     if (!dialogue) return;
     if (!selfSpeaker) {
-      setError('練習する役を選んでください。');
+      setError('Pick a role to practice as.');
       return;
     }
     setError(null);
@@ -356,72 +377,76 @@ export function DialoguePage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl bg-gradient-to-br from-sky-500 to-pink-500 text-white p-5 shadow-md">
-        <h1 className="text-xl font-bold">TalkSim — 会話生成・語彙入れ替え・発音練習</h1>
-        <p className="text-sm opacity-90 mt-1">
-          言語を選び日本語でシチュエーションを入力すると、会話文と語彙入れ替え候補が生成されます。役を選んでマイクボタンを押すと、発音や応答内容をAIが評価します。
-        </p>
-      </section>
-
       {!hasKey && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <span className="font-semibold">🔑 APIキーが未設定です。</span>{' '}
+          No API key set.{' '}
           <Link to="/settings" className="underline hover:text-amber-700">
-            設定ページ
+            Open Settings
           </Link>{' '}
-          で Gemini APIキーを登録してください。
+          to register a Gemini API key.
         </div>
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <div>
-          <div className="text-xs font-semibold text-slate-600 mb-1.5">1. 学ぶ言語を選ぶ</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {(Object.keys(LANGUAGES) as TargetLanguage[]).map((k) => (
-              <button
-                key={k}
-                onClick={() => setLanguage(k)}
-                className={`rounded-lg border-2 px-3 py-2 text-left transition ${
-                  language === k
-                    ? 'border-sky-500 bg-sky-50'
-                    : 'border-slate-200 hover:border-slate-400'
-                }`}
-              >
-                <div className="text-sm font-semibold">{LANGUAGES[k].label}</div>
-                <div className="text-[11px] text-slate-500">{LANGUAGES[k].nativeName}</div>
-              </button>
-            ))}
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {(Object.keys(LANGUAGES) as TargetLanguage[]).map((k) => (
+            <button
+              key={k}
+              onClick={() => setLanguage(k)}
+              className={`rounded-lg border-2 px-3 py-2 text-left transition ${
+                language === k
+                  ? 'border-sky-500 bg-sky-50'
+                  : 'border-slate-200 hover:border-slate-400'
+              }`}
+            >
+              <div className="text-sm font-semibold">{LANGUAGES[k].label}</div>
+              <div className="text-[11px] text-slate-500">{LANGUAGES[k].nativeName}</div>
+            </button>
+          ))}
         </div>
 
-        <div>
-          <div className="text-xs font-semibold text-slate-600 mb-1.5">
-            2. シチュエーションを日本語で入力
-          </div>
-          <textarea
-            rows={3}
-            value={situation}
-            onChange={(e) => setSituation(e.target.value)}
-            placeholder="例：カフェで店員さんにラテを注文する。ミルクの種類と砂糖の有無を聞かれる想定。"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
-          />
-          <details className="text-xs text-slate-600 mt-1">
-            <summary className="cursor-pointer hover:text-slate-900">例文を見る</summary>
-            <ul className="mt-2 space-y-1">
-              {EXAMPLES.map((ex) => (
-                <li key={ex}>
-                  <button
-                    type="button"
-                    onClick={() => setSituation(ex)}
-                    className="text-left text-sky-700 hover:underline"
-                  >
-                    {ex}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </details>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {(Object.keys(DIFFICULTIES) as Difficulty[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setDifficulty(k)}
+              className={`rounded-lg border px-3 py-2 text-left transition ${
+                difficulty === k
+                  ? 'border-violet-500 bg-violet-50'
+                  : 'border-slate-200 hover:border-slate-400'
+              }`}
+              title={DIFFICULTIES[k].hint}
+            >
+              <div className="text-sm font-semibold">{DIFFICULTIES[k].label}</div>
+              <div className="text-[11px] text-slate-500 line-clamp-2">{DIFFICULTIES[k].hint}</div>
+            </button>
+          ))}
         </div>
+
+        <textarea
+          rows={3}
+          value={situation}
+          onChange={(e) => setSituation(e.target.value)}
+          placeholder="Describe the situation in English…"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+        />
+        <details className="text-xs text-slate-600">
+          <summary className="cursor-pointer hover:text-slate-900">Examples</summary>
+          <ul className="mt-2 space-y-1">
+            {EXAMPLES.map((ex) => (
+              <li key={ex}>
+                <button
+                  type="button"
+                  onClick={() => setSituation(ex)}
+                  className="text-left text-sky-700 hover:underline"
+                >
+                  {ex}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
 
         <div className="flex items-center gap-2 justify-end">
           {error && <span className="text-xs text-red-600 mr-auto">{error}</span>}
@@ -431,7 +456,7 @@ export function DialoguePage() {
             disabled={loading || !situation.trim()}
             className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold disabled:opacity-50"
           >
-            {loading ? '生成中…' : dialogue ? '別の会話を生成' : '会話を生成'}
+            {loading ? 'Generating…' : dialogue ? 'Generate again' : 'Generate'}
           </button>
         </div>
       </section>
@@ -441,7 +466,8 @@ export function DialoguePage() {
           <header className="flex items-center justify-between gap-2 flex-wrap">
             <div className="min-w-0">
               <div className="text-[11px] text-slate-500">
-                {LANGUAGES[dialogue.language].label}・{dialogue.lines.length}行
+                {LANGUAGES[dialogue.language].label} · {DIFFICULTIES[dialogue.difficulty].label} ·{' '}
+                {dialogue.lines.length} lines
               </div>
               <h2 className="font-bold truncate">{dialogue.title}</h2>
               <p className="text-xs text-slate-500 truncate">{dialogue.situation}</p>
@@ -457,7 +483,7 @@ export function DialoguePage() {
                   }}
                   className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
                 >
-                  ■ 停止
+                  ■ Stop
                 </button>
               ) : (
                 <button
@@ -466,7 +492,7 @@ export function DialoguePage() {
                   disabled={practicing}
                   className="text-xs px-3 py-1.5 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
                 >
-                  ▶ すべて再生
+                  ▶ Play all
                 </button>
               )}
               <button
@@ -475,15 +501,14 @@ export function DialoguePage() {
                 disabled={Object.keys(selections).length === 0}
                 className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
               >
-                入れ替えをリセット
+                Reset swaps
               </button>
             </div>
           </header>
 
-          {/* Role + Practice control */}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
             <div className="flex items-center flex-wrap gap-2">
-              <span className="text-xs font-semibold text-slate-700 mr-1">あなたの役：</span>
+              <span className="text-xs font-semibold text-slate-700 mr-1">Your role:</span>
               {speakers.map((s) => (
                 <button
                   key={s}
@@ -516,45 +541,34 @@ export function DialoguePage() {
                     : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'
                 } ${practicing ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
-                聞くだけ
+                Listen only
               </button>
-            </div>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-[11px] text-slate-600">
-                {selfSpeaker
-                  ? `あなたは「${selfSpeaker}」役。あなたのセリフには🎤録音ボタンが表示され、発音と応答内容をAIが評価します。`
-                  : '聞くだけモード。録音ボタンは表示されません。'}
-              </p>
-              {practicing ? (
-                <button
-                  type="button"
-                  onClick={stopPractice}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
-                >
-                  ■ 練習を停止
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startPractice}
-                  disabled={!selfSpeaker}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                  title={selfSpeaker ? 'ガイド付き練習を開始' : 'まず役を選んでください'}
-                >
-                  🎙 ロールプレイ練習を開始
-                </button>
-              )}
+              <div className="ml-auto">
+                {practicing ? (
+                  <button
+                    type="button"
+                    onClick={stopPractice}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+                  >
+                    ■ Stop practice
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startPractice}
+                    disabled={!selfSpeaker}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    🎙 Start role-play
+                  </button>
+                )}
+              </div>
             </div>
             {!sttOk && selfSpeaker && (
               <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                ⚠ このブラウザは音声認識に対応していません。発音評価は Chrome / Edge でご利用ください。
+                Speech recognition is unavailable in this browser. Use Chrome or Edge for pronunciation feedback.
               </div>
             )}
-          </div>
-
-          <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">使い方：</span>{' '}
-            色付きのボタンは入れ替え可能な語彙です。クリックで候補一覧から差し替えられ、再生時にも反映されます。あなたの役のセリフでは「🎤 録音」を押して音読すると、AIが発音と内容をチェックし、間違いがあれば日本語で指摘します。
           </div>
 
           <div className="space-y-2">
@@ -596,7 +610,7 @@ export function DialoguePage() {
 
       {dialogues.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-          <h2 className="font-semibold text-sm">最近生成した会話</h2>
+          <h2 className="font-semibold text-sm">Recent dialogues</h2>
           <ul className="space-y-1.5">
             {dialogues.slice(0, 8).map((d) => (
               <li key={d.id}>
@@ -608,6 +622,9 @@ export function DialoguePage() {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
                       {LANGUAGES[d.language].label}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">
+                      {DIFFICULTIES[d.difficulty].label}
                     </span>
                     <span className="text-sm font-medium truncate">{d.title}</span>
                   </div>

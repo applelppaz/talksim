@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { withKeyRotation } from './apiKeyManager';
-import type { Dialogue, DialogueLine, PronunciationEval, TargetLanguage } from '../types';
+import type { Difficulty, Dialogue, DialogueLine, PronunciationEval, TargetLanguage } from '../types';
 import { uid } from './storage';
 import { DIALOGUE_PROMPT, EVAL_PROMPT } from './prompts';
 
@@ -42,7 +42,7 @@ function parseJsonLoose<T>(raw: string): T {
     if (start >= 0 && end > start) {
       return JSON.parse(trimmed.slice(start, end + 1)) as T;
     }
-    throw new Error(`AIからの応答をJSONとして解釈できませんでした: ${trimmed.slice(0, 120)}`);
+    throw new Error(`Failed to parse AI response as JSON: ${trimmed.slice(0, 120)}`);
   }
 }
 
@@ -62,10 +62,11 @@ interface RawDialogue {
 
 export async function generateDialogue(
   situation: string,
-  language: TargetLanguage
+  language: TargetLanguage,
+  difficulty: Difficulty
 ): Promise<Dialogue> {
   const raw = await generateJson<RawDialogue>({
-    prompt: DIALOGUE_PROMPT(situation, language),
+    prompt: DIALOGUE_PROMPT(situation, language, difficulty),
   });
 
   const lines: DialogueLine[] = (raw.lines ?? []).map((line) => ({
@@ -86,13 +87,14 @@ export async function generateDialogue(
   }));
 
   if (lines.length === 0) {
-    throw new Error('AIが会話を生成できませんでした。シチュエーションを少し具体的にして再試行してください。');
+    throw new Error('The model returned no dialogue. Try a more specific situation.');
   }
 
   return {
     id: uid(),
     language,
     situation: situation.trim(),
+    difficulty,
     title: raw.title?.trim() || situation.trim().slice(0, 24),
     lines,
     createdAt: Date.now(),
@@ -132,7 +134,7 @@ export async function evaluatePronunciation(params: {
     summary: raw.summary ?? '',
     issues: (raw.issues ?? [])
       .filter((i) => (i.detail ?? '').trim().length > 0)
-      .map((i) => ({ kind: i.kind?.trim() || '指摘', detail: i.detail ?? '' })),
+      .map((i) => ({ kind: i.kind?.trim() || 'Note', detail: i.detail ?? '' })),
     suggestion: raw.suggestion,
     transcript: params.transcript,
     expected: params.expected,
@@ -152,7 +154,7 @@ export async function geminiTts(text: string): Promise<{ data: string; mimeType:
     const part = response.candidates?.[0]?.content?.parts?.[0];
     const inline = part?.inlineData;
     if (!inline?.data) {
-      throw new Error('Gemini TTSから音声データを取得できませんでした。');
+      throw new Error('Gemini TTS returned no audio data.');
     }
     return { data: inline.data, mimeType: inline.mimeType ?? 'audio/pcm' };
   });

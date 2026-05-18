@@ -12,7 +12,7 @@ function getAudioContext(): AudioContext {
       (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
         .AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) throw new Error('このブラウザはAudioContextをサポートしていません。');
+    if (!Ctor) throw new Error('AudioContext is not supported in this browser.');
     audioCtx = new Ctor();
   }
   return audioCtx;
@@ -41,7 +41,7 @@ export function browserTtsSupported(): boolean {
 
 async function speakBrowser(text: string, lang: TargetLanguage, preferredVoice?: string): Promise<void> {
   if (!browserTtsSupported()) {
-    throw new Error('このブラウザは音声合成（TTS）に対応していません。');
+    throw new Error('Speech synthesis (TTS) is not supported in this browser.');
   }
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = LANGUAGES[lang].bcp47;

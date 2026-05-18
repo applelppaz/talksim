@@ -17,7 +17,7 @@ export function PracticeFeedback({ result, onRetry, onDismiss }: Props) {
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
           <span className={`px-2 py-0.5 rounded-full border font-semibold ${scoreColor}`}>
-            {result.ok ? 'OK' : '改善あり'}・{result.score}点
+            {result.ok ? 'OK' : 'Needs work'} · {result.score}
           </span>
           <span className="text-slate-700">{result.summary}</span>
         </div>
@@ -27,13 +27,13 @@ export function PracticeFeedback({ result, onRetry, onDismiss }: Props) {
             onClick={onRetry}
             className="px-2 py-0.5 rounded bg-sky-600 text-white hover:bg-sky-700"
           >
-            もう一度
+            Retry
           </button>
           <button
             type="button"
             onClick={onDismiss}
             className="px-2 py-0.5 rounded bg-slate-200 hover:bg-slate-300"
-            title="このフィードバックを閉じる"
+            title="Dismiss feedback"
           >
             ×
           </button>
@@ -41,12 +41,12 @@ export function PracticeFeedback({ result, onRetry, onDismiss }: Props) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="rounded bg-white border border-slate-200 p-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">目標</div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">Target</div>
           <div className="text-slate-800 break-words">{result.expected}</div>
         </div>
         <div className="rounded bg-white border border-slate-200 p-2">
-          <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">あなたの発話（認識）</div>
-          <div className="text-slate-800 break-words">{result.transcript || '（認識できず）'}</div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">Your speech (recognized)</div>
+          <div className="text-slate-800 break-words">{result.transcript || '(not recognized)'}</div>
         </div>
       </div>
       {result.issues.length > 0 && (
@@ -63,7 +63,7 @@ export function PracticeFeedback({ result, onRetry, onDismiss }: Props) {
       )}
       {result.suggestion && (
         <div className="mt-2 text-slate-700">
-          <span className="font-semibold">💡 </span>
+          <span className="font-semibold">Tip: </span>
           {result.suggestion}
         </div>
       )}

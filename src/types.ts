@@ -2,9 +2,30 @@ export type TargetLanguage = 'en' | 'zh' | 'es' | 'fr';
 
 export const LANGUAGES: Record<TargetLanguage, { label: string; bcp47: string; nativeName: string }> = {
   en: { label: 'English', bcp47: 'en-US', nativeName: 'English' },
-  zh: { label: '中国語', bcp47: 'zh-CN', nativeName: '中文' },
-  es: { label: 'スペイン語', bcp47: 'es-ES', nativeName: 'Español' },
-  fr: { label: 'フランス語', bcp47: 'fr-FR', nativeName: 'Français' },
+  zh: { label: 'Chinese', bcp47: 'zh-CN', nativeName: '中文' },
+  es: { label: 'Spanish', bcp47: 'es-ES', nativeName: 'Español' },
+  fr: { label: 'French', bcp47: 'fr-FR', nativeName: 'Français' },
+};
+
+export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+
+export const DIFFICULTIES: Record<Difficulty, { label: string; hint: string }> = {
+  beginner: {
+    label: 'Beginner',
+    hint: 'Short everyday phrases, present tense, A1–A2 vocabulary',
+  },
+  intermediate: {
+    label: 'Intermediate',
+    hint: 'Natural phrasing, common idioms, mixed tenses, B1 vocabulary',
+  },
+  advanced: {
+    label: 'Advanced',
+    hint: 'Idiomatic, register-aware, longer subordinate clauses, B2–C1 vocabulary',
+  },
+  expert: {
+    label: 'Expert',
+    hint: 'Native-fluent, slang or specialized jargon, nuanced register, complex syntax',
+  },
 };
 
 export interface VocabAlternative {
@@ -30,6 +51,7 @@ export interface Dialogue {
   id: string;
   language: TargetLanguage;
   situation: string;
+  difficulty: Difficulty;
   title: string;
   lines: DialogueLine[];
   createdAt: number;
@@ -64,5 +86,6 @@ export interface AppSettings {
   apiKeys: ApiKeyState[];
   ttsMode: TtsMode;
   autoPlay: boolean;
+  difficulty: Difficulty;
   voicePreference?: string;
 }
