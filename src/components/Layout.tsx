@@ -29,8 +29,7 @@ export function Layout() {
             TalkSim
           </Link>
           <nav className="flex items-center gap-1">
-            <NavItem to="/">ホーム</NavItem>
-            <NavItem to="/vocabulary">語彙</NavItem>
+            <NavItem to="/">会話を生成</NavItem>
             <NavItem to="/settings">設定</NavItem>
           </nav>
         </div>

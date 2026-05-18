@@ -1,83 +1,57 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { storage } from '../lib/storage';
-import type { AppSettings, ConversationSession, VocabEntry } from '../types';
+import type { AppSettings, Dialogue } from '../types';
 
 interface AppContextValue {
   settings: AppSettings;
   setSettings: (s: AppSettings) => void;
-  vocab: VocabEntry[];
-  addVocab: (entries: VocabEntry[]) => void;
-  removeVocab: (id: string) => void;
-  sessions: ConversationSession[];
-  currentSession: ConversationSession | null;
-  setCurrentSession: (s: ConversationSession | null) => void;
-  finalizeSession: (s: ConversationSession) => void;
+  dialogues: Dialogue[];
+  addDialogue: (d: Dialogue) => void;
+  removeDialogue: (id: string) => void;
   clearAll: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+const MAX_HISTORY = 20;
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [settings, setSettingsState] = useState<AppSettings>(() => storage.loadSettings());
-  const [vocab, setVocab] = useState<VocabEntry[]>(() => storage.loadVocab());
-  const [sessions, setSessions] = useState<ConversationSession[]>(() => storage.loadSessions());
-  const [currentSession, setCurrentSessionState] = useState<ConversationSession | null>(() => storage.loadCurrentSession());
+  const [dialogues, setDialogues] = useState<Dialogue[]>(() => storage.loadDialogues());
 
   useEffect(() => {
     storage.saveSettings(settings);
   }, [settings]);
   useEffect(() => {
-    storage.saveVocab(vocab);
-  }, [vocab]);
-  useEffect(() => {
-    storage.saveSessions(sessions);
-  }, [sessions]);
-  useEffect(() => {
-    storage.saveCurrentSession(currentSession);
-  }, [currentSession]);
+    storage.saveDialogues(dialogues);
+  }, [dialogues]);
 
   const setSettings = useCallback((s: AppSettings) => setSettingsState(s), []);
-  const addVocab = useCallback((entries: VocabEntry[]) => {
-    setVocab((prev) => [...entries, ...prev]);
-  }, []);
-  const removeVocab = useCallback((id: string) => {
-    setVocab((prev) => prev.filter((v) => v.id !== id));
+
+  const addDialogue = useCallback((d: Dialogue) => {
+    setDialogues((prev) => [d, ...prev.filter((p) => p.id !== d.id)].slice(0, MAX_HISTORY));
   }, []);
 
-  const setCurrentSession = useCallback((s: ConversationSession | null) => {
-    setCurrentSessionState(s);
-  }, []);
-
-  const finalizeSession = useCallback((s: ConversationSession) => {
-    setSessions((prev) => {
-      const exists = prev.find((p) => p.id === s.id);
-      if (exists) return prev.map((p) => (p.id === s.id ? s : p));
-      return [s, ...prev];
-    });
+  const removeDialogue = useCallback((id: string) => {
+    setDialogues((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
   const clearAll = useCallback(() => {
     storage.clearAll();
     setSettingsState(storage.loadSettings());
-    setVocab([]);
-    setSessions([]);
-    setCurrentSessionState(null);
+    setDialogues([]);
   }, []);
 
   const value = useMemo<AppContextValue>(
     () => ({
       settings,
       setSettings,
-      vocab,
-      addVocab,
-      removeVocab,
-      sessions,
-      currentSession,
-      setCurrentSession,
-      finalizeSession,
+      dialogues,
+      addDialogue,
+      removeDialogue,
       clearAll,
     }),
-    [settings, setSettings, vocab, addVocab, removeVocab, sessions, currentSession, setCurrentSession, finalizeSession, clearAll]
+    [settings, setSettings, dialogues, addDialogue, removeDialogue, clearAll]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

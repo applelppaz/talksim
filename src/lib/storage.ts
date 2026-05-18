@@ -1,10 +1,8 @@
-import type { AppSettings, ConversationSession, VocabEntry } from '../types';
+import type { AppSettings, Dialogue } from '../types';
 
 const KEYS = {
   settings: 'talksim:settings',
-  vocab: 'talksim:vocab',
-  sessions: 'talksim:sessions',
-  currentSession: 'talksim:currentSession',
+  dialogues: 'talksim:dialogues',
 } as const;
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -35,29 +33,18 @@ export const storage = {
   loadSettings(): AppSettings {
     const s = read<AppSettings>(KEYS.settings, DEFAULT_SETTINGS);
     while (s.apiKeys.length < 3) s.apiKeys.push({ key: '' });
+    if (typeof s.autoPlay !== 'boolean') s.autoPlay = true;
+    if (s.ttsMode !== 'browser' && s.ttsMode !== 'gemini') s.ttsMode = 'browser';
     return s;
   },
   saveSettings(s: AppSettings): void {
     write(KEYS.settings, s);
   },
-  loadVocab(): VocabEntry[] {
-    return read<VocabEntry[]>(KEYS.vocab, []);
+  loadDialogues(): Dialogue[] {
+    return read<Dialogue[]>(KEYS.dialogues, []);
   },
-  saveVocab(v: VocabEntry[]): void {
-    write(KEYS.vocab, v);
-  },
-  loadSessions(): ConversationSession[] {
-    return read<ConversationSession[]>(KEYS.sessions, []);
-  },
-  saveSessions(s: ConversationSession[]): void {
-    write(KEYS.sessions, s);
-  },
-  loadCurrentSession(): ConversationSession | null {
-    return read<ConversationSession | null>(KEYS.currentSession, null);
-  },
-  saveCurrentSession(s: ConversationSession | null): void {
-    if (s === null) localStorage.removeItem(KEYS.currentSession);
-    else write(KEYS.currentSession, s);
+  saveDialogues(d: Dialogue[]): void {
+    write(KEYS.dialogues, d);
   },
   clearAll(): void {
     Object.values(KEYS).forEach((k) => localStorage.removeItem(k));

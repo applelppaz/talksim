@@ -1,170 +1,93 @@
-import { LANGUAGES, type TargetLanguage, type Message } from '../types';
-
-export function langName(lang: TargetLanguage): string {
-  return LANGUAGES[lang].label;
-}
+import { LANGUAGES, type TargetLanguage } from '../types';
 
 function nativeName(lang: TargetLanguage): string {
   return LANGUAGES[lang].nativeName;
 }
 
-export const OUTLINE_PROMPT = (situation: string, lang: TargetLanguage) => `あなたは語学学習教材の作成者です。以下のシチュエーションでの${langName(lang)}会話練習の流れを、4〜6個のステップに分けて日本語で出力してください。
-
-【シチュエーション】
-${situation}
-
-各ステップは、誰が何をするか（例：「店員が挨拶し、注文を尋ねる」「客がメニューについて質問する」など）が分かるように簡潔に書いてください。
-JSON形式で出力してください：
-{
-  "outline": ["ステップ1の説明", "ステップ2の説明", ...]
-}`;
-
-export const FIRST_TURN_PROMPT = (
-  situation: string,
-  outline: string[],
-  lang: TargetLanguage
-) => `あなたは語学学習者の会話練習相手です。以下の設定で、${nativeName(lang)}でロールプレイを開始してください。
+export const EVAL_PROMPT = (
+  lang: TargetLanguage,
+  speaker: string,
+  expectedText: string,
+  expectedTranslation: string,
+  userTranscript: string,
+  situation: string
+) => {
+  const native = nativeName(lang);
+  return `あなたは${native}の語学講師です。学習者がロールプレイで「${speaker}」のセリフを音読しました。下記の目標セリフと、学習者の発話（音声認識による書き起こし）を比較し、発音と応答の正確さを評価してください。
 
 【シチュエーション（日本語）】
 ${situation}
 
-【会話の流れ】
-${outline.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+【目標のセリフ（${native}）】
+${expectedText}
 
-あなたはユーザー（学習者）の会話相手として、まず最初の発話をしてください。短く自然な発話（1〜2文）にしてください。
-JSON形式で出力してください：
+【目標のセリフの日本語訳】
+${expectedTranslation}
+
+【学習者の発話（音声認識結果、${native}）】
+${userTranscript}
+
+【評価指針】
+- 軽微なタイポ・句読点・大文字小文字の違いは無視してください。
+- 音声認識結果は学習者の発音の手がかりです。単語の取り違え・抜け・余分・並び順の崩れは「発音」または「語彙」の問題として指摘してください。
+- 目標と全く違う内容を話している場合、その内容がシチュエーション上自然な応答であれば「内容のズレ」として指摘しつつ、文脈的には許容できる旨も併記してください。
+- 指摘はできるだけ具体的に、日本語で1〜3個に絞ってください。
+- ${native}を引用する際は元の文字どおり書いてください（ローマ字化や翻訳をしない）。
+
+【出力（JSONのみ。コードブロック記号は付けない）】
 {
-  "text": "${nativeName(lang)}での発話",
-  "translation": "日本語訳"
-}`;
-
-export const NEXT_TURN_PROMPT = (
-  situation: string,
-  outline: string[],
-  lang: TargetLanguage,
-  history: Message[]
-) => `あなたは語学学習者の会話練習相手です。${nativeName(lang)}でロールプレイを続けてください。
-
-【シチュエーション（日本語）】
-${situation}
-
-【会話の流れ】
-${outline.map((s, i) => `${i + 1}. ${s}`).join('\n')}
-
-【これまでの会話】
-${formatHistory(history, lang)}
-
-ユーザーの直前の発話に対して、自然な応答を${nativeName(lang)}で1〜2文返してください。会話の流れに沿って進めてください。
-JSON形式で出力してください：
-{
-  "text": "${nativeName(lang)}での発話",
-  "translation": "日本語訳"
-}`;
-
-export const HELP_PROMPT = (
-  situation: string,
-  outline: string[],
-  lang: TargetLanguage,
-  history: Message[]
-) => `あなたは語学学習のアドバイザーです。学習者が次に何と言えばよいか分からない状況です。
-
-【シチュエーション】
-${situation}
-
-【会話の流れ】
-${outline.map((s, i) => `${i + 1}. ${s}`).join('\n')}
-
-【これまでの会話】
-${formatHistory(history, lang)}
-
-学習者が次に言うべき内容について、${nativeName(lang)}での例文を1〜2つと、その日本語訳、使い方や注意点の解説を日本語で出力してください。
-JSON形式で出力してください：
-{
-  "suggestions": [
-    { "text": "例文（${nativeName(lang)}）", "translation": "日本語訳" }
+  "ok": true または false（発音・内容ともに概ね問題なければ true）,
+  "score": 0〜100の整数,
+  "summary": "総評（日本語、1〜2文）",
+  "issues": [
+    { "kind": "発音 | 語彙 | 文法 | 抜け | 余分 | 内容のズレ", "detail": "具体的な内容（日本語）" }
   ],
-  "explanation": "日本語での解説（場面で言うべき内容、表現のポイント、注意点）"
+  "suggestion": "次回への改善ポイント（日本語、1文）"
 }`;
+};
 
-export const QUESTION_PROMPT = (
-  lang: TargetLanguage,
-  history: Message[],
-  targetMessage: Message,
-  question: string
-) => `あなたは語学学習のサポート役です。学習者がAIの発話について質問しています。
+export const DIALOGUE_PROMPT = (situation: string, lang: TargetLanguage) => {
+  const native = nativeName(lang);
+  return `あなたは語学教材の作成者です。日本人学習者向けに、${native}の会話例とその語彙入れ替え候補を作成してください。
 
-【会話履歴】
-${formatHistory(history, lang)}
-
-【質問対象のAI発話】
-${targetMessage.text}（${nativeName(lang)}）
-日本語訳: ${targetMessage.translation ?? '（未取得）'}
-
-【学習者の質問（日本語）】
-${question}
-
-質問に対して、日本語で丁寧に分かりやすく回答してください。文法・語彙・文化的背景など、必要に応じて触れてください。
-JSON形式で出力してください：
-{
-  "answer": "日本語での回答"
-}`;
-
-export const CHECK_PROMPT = (
-  lang: TargetLanguage,
-  history: Message[],
-  userText: string
-) => `あなたは${nativeName(lang)}の語学講師です。学習者の発話に、文法的・語法的・自然さの観点で問題がないか確認してください。
-
-【会話の流れ（直近の履歴）】
-${formatHistory(history.slice(-6), lang)}
-
-【学習者の発話】
-${userText}
-
-判定基準：
-- 軽微なタイポや句読点は無視してください。
-- 文法的に正しく、その場面で自然であればOKとしてください。
-- 問題がある場合は、何が問題かを日本語で具体的に指摘し、より自然な表現を提示してください。
-
-JSON形式で出力してください：
-{
-  "ok": true または false,
-  "issues": ["問題点1（日本語）", "問題点2（日本語）", ...],
-  "improved": "より自然な${nativeName(lang)}での言い方（問題がない場合は省略可）",
-  "comment": "学習者へのコメント（日本語、1〜2文）"
-}`;
-
-export const VOCAB_PROMPT = (lang: TargetLanguage, situation: string, history: Message[]) => `あなたは語学学習教材の編集者です。以下の${nativeName(lang)}会話練習から、学習価値の高いフレーズや語彙を5〜15個抽出してください。
-
-【シチュエーション】
+【シチュエーション（日本語）】
 ${situation}
 
-【会話】
-${formatHistory(history, lang)}
+【目的】
+- 学習者がこの会話を音読・聴解することで、${native}のリスニング・スピーキング・語彙力を高められるようにします。
+- セリフの一部の単語やフレーズを入れ替えることで、別の場面でも使い回せる「定型文」として学習できるようにします。
 
-抽出基準：
-- 場面で使える定型表現や応用が利く表現を優先
-- 学習者にとって役立つ語彙・コロケーション
-- 過度に簡単なもの（hello, yes, no など）は除外
+【要件】
+1. 2人の登場人物による自然で実用的な${native}の会話を、6〜10往復（合計のセリフ数で12〜16行程度）で作成してください。
+2. 各セリフの「テンプレート」には、入れ替え可能な単語/フレーズを {0} {1} {2} の形のプレースホルダで埋め込んでください。プレースホルダ番号はそのセリフ内で 0 から連番で振ってください。
+3. 各セリフに 1〜3 個のプレースホルダを設定してください。プレースホルダは、別の場面でも応用が利きそうな「入れ替え価値の高い」箇所に置いてください（名詞・形容詞・短い動詞句・時刻・地名 など）。
+4. 各プレースホルダに対して、入れ替え候補（alternatives）を 8〜12 個用意してください。シーンの文脈を変えずに自然に挿入できる、語彙力が広がる多彩な候補にしてください。
+5. 元の語（original）と alternatives は意味・品詞が同類で、文法的にもそのまま挿入できる形にしてください。
+6. translation は、元の語を当てはめた状態のセリフ全体の自然な日本語訳にしてください。
+7. speaker は、シチュエーションに即した日本語の役柄名（例：「店員」「客」「面接官」「応募者」「友人A」「友人B」など）にしてください。
+8. title は、この会話の短い日本語タイトル（10〜20字程度）にしてください。
 
-JSON形式で出力してください：
+【出力形式】
+以下のJSON形式のみを出力してください。コードブロック記号や説明文は含めないでください。
+
 {
-  "items": [
+  "title": "短い日本語タイトル",
+  "lines": [
     {
-      "phrase": "${nativeName(lang)}でのフレーズ",
-      "meaning_ja": "日本語訳",
-      "example": "実際の使用例（${nativeName(lang)}、会話中の例または応用例）"
+      "speaker": "話者名（日本語）",
+      "template": "${native}のセリフ。入れ替え可能な部分は {0} などのプレースホルダにする。",
+      "translation": "元の語を当てはめた状態の日本語訳",
+      "slots": [
+        {
+          "original": "{0} に入る元の${native}の語/フレーズ",
+          "translation": "originalの日本語訳",
+          "alternatives": [
+            { "text": "候補1（${native}）", "translation": "候補1の日本語訳" },
+            { "text": "候補2（${native}）", "translation": "候補2の日本語訳" }
+          ]
+        }
+      ]
     }
   ]
 }`;
-
-function formatHistory(history: Message[], _lang: TargetLanguage): string {
-  if (history.length === 0) return '（まだ会話はありません）';
-  return history
-    .map((m) => {
-      const who = m.role === 'ai' ? 'AI' : 'ユーザー';
-      const trans = m.translation ? `（日本語: ${m.translation}）` : '';
-      return `${who}: ${m.text}${trans}`;
-    })
-    .join('\n');
-}
+};

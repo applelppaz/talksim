@@ -1,118 +1,114 @@
 import { LANGUAGES, type TargetLanguage } from '../types';
 
-interface SpeechRecognitionResultItem {
-  transcript: string;
-  confidence: number;
-}
-
-interface SpeechRecognitionAlternativeList {
-  length: number;
-  [index: number]: SpeechRecognitionResultItem;
-}
-
-interface SpeechRecognitionResultLike {
-  isFinal: boolean;
-  [index: number]: SpeechRecognitionResultItem;
-  length: number;
-}
-
-interface SpeechRecognitionResultListLike {
-  length: number;
-  [index: number]: SpeechRecognitionResultLike;
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: SpeechRecognitionResultListLike;
-}
-
-interface SpeechRecognitionErrorEventLike {
-  error: string;
-  message?: string;
-}
+type RecCtor = new () => SpeechRecognitionLike;
 
 interface SpeechRecognitionLike {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((ev: SpeechRecognitionErrorEventLike) => void) | null;
+  maxAlternatives: number;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((e: { error?: string; message?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
   abort: () => void;
 }
 
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-function getCtor(): SpeechRecognitionCtor | null {
-  const w = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
+function getCtor(): RecCtor | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as { SpeechRecognition?: RecCtor; webkitSpeechRecognition?: RecCtor };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
 export function sttSupported(): boolean {
-  return typeof window !== 'undefined' && getCtor() !== null;
+  return getCtor() !== null;
 }
 
-export interface SttHandle {
+export interface RecognitionHandle {
+  /** Finish gracefully — use a final result if speech was detected. */
   stop: () => void;
+  /** Cancel without surfacing an error to the caller. */
+  cancel: () => void;
 }
 
-export interface SttCallbacks {
-  onInterim?: (text: string) => void;
-  onFinal: (text: string) => void;
-  onError?: (msg: string) => void;
-  onEnd?: () => void;
+export interface RecognitionOptions {
+  lang: TargetLanguage;
+  onResult: (transcript: string) => void;
+  onError: (err: Error) => void;
+  onEnd: () => void;
 }
 
-export function startListening(lang: TargetLanguage, cb: SttCallbacks): SttHandle {
+export function startRecognition({ lang, onResult, onError, onEnd }: RecognitionOptions): RecognitionHandle {
   const Ctor = getCtor();
   if (!Ctor) {
-    cb.onError?.('このブラウザは音声認識に対応していません。');
-    return { stop: () => {} };
+    onError(new Error('このブラウザは音声認識に対応していません。Chrome / Edge を推奨します。'));
+    onEnd();
+    return { stop: () => {}, cancel: () => {} };
   }
   const rec = new Ctor();
   rec.lang = LANGUAGES[lang].bcp47;
   rec.continuous = false;
-  rec.interimResults = true;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
 
-  let finalText = '';
-
-  rec.onresult = (ev) => {
-    let interim = '';
-    for (let i = ev.resultIndex; i < ev.results.length; i += 1) {
-      const result = ev.results[i];
-      const alts = result as unknown as SpeechRecognitionAlternativeList;
-      const text = alts[0]?.transcript ?? '';
-      if (result.isFinal) {
-        finalText += text;
-      } else {
-        interim += text;
-      }
-    }
-    if (interim) cb.onInterim?.(finalText + interim);
+  let finished = false;
+  let cancelled = false;
+  const finishOk = (text: string) => {
+    if (finished || cancelled) return;
+    finished = true;
+    onResult(text);
   };
-  rec.onerror = (ev) => {
-    cb.onError?.(ev.message || ev.error || '音声認識でエラーが発生しました。');
+  const finishErr = (err: Error) => {
+    if (finished || cancelled) return;
+    finished = true;
+    onError(err);
+  };
+
+  rec.onresult = (e) => {
+    const text = e.results?.[0]?.[0]?.transcript ?? '';
+    if (text.trim().length > 0) finishOk(text);
+  };
+  rec.onerror = (e) => {
+    const code = e?.error ?? 'unknown';
+    if (code === 'aborted') {
+      finished = true;
+      return;
+    }
+    const map: Record<string, string> = {
+      'not-allowed': 'マイクの使用が許可されていません。ブラウザのアドレスバー左のアイコンから許可してください。',
+      'service-not-allowed': 'このブラウザでは音声認識サービスが利用できません。',
+      'no-speech': '音声が検出できませんでした。もう一度話してみてください。',
+      'audio-capture': 'マイクが見つかりませんでした。デバイス設定を確認してください。',
+      'network': 'ネットワークエラーが発生しました。',
+    };
+    finishErr(new Error(map[code] ?? `音声認識エラー（${code}）`));
   };
   rec.onend = () => {
-    if (finalText.trim()) cb.onFinal(finalText.trim());
-    cb.onEnd?.();
+    if (!finished && !cancelled) {
+      finishErr(new Error('音声を認識できませんでした。マイクの近くで明瞭に話してください。'));
+    }
+    onEnd();
   };
 
   try {
     rec.start();
   } catch (err) {
-    cb.onError?.(err instanceof Error ? err.message : '音声認識を開始できませんでした。');
+    onError(err instanceof Error ? err : new Error(String(err)));
+    onEnd();
   }
-
   return {
     stop: () => {
       try {
         rec.stop();
+      } catch {
+        /* noop */
+      }
+    },
+    cancel: () => {
+      cancelled = true;
+      try {
+        rec.abort();
       } catch {
         /* noop */
       }
