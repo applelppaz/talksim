@@ -1,16 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { withKeyRotation } from './apiKeyManager';
-import type { Correction, Message, TargetLanguage, VocabEntry } from '../types';
+import type { Dialogue, DialogueLine, TargetLanguage } from '../types';
 import { uid } from './storage';
-import {
-  CHECK_PROMPT,
-  FIRST_TURN_PROMPT,
-  HELP_PROMPT,
-  NEXT_TURN_PROMPT,
-  OUTLINE_PROMPT,
-  QUESTION_PROMPT,
-  VOCAB_PROMPT,
-} from './prompts';
+import { DIALOGUE_PROMPT } from './prompts';
 
 const CHAT_MODEL = 'gemini-2.5-flash';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
@@ -32,7 +24,7 @@ async function generateJson<T>({ prompt, model = CHAT_MODEL }: JsonGenOptions): 
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        temperature: 0.7,
+        temperature: 0.8,
       },
     });
     const raw = response.text ?? '';
@@ -54,108 +46,59 @@ function parseJsonLoose<T>(raw: string): T {
   }
 }
 
-export async function generateOutline(
+interface RawDialogue {
+  title?: string;
+  lines?: {
+    speaker?: string;
+    template?: string;
+    translation?: string;
+    slots?: {
+      original?: string;
+      translation?: string;
+      alternatives?: { text?: string; translation?: string }[];
+    }[];
+  }[];
+}
+
+export async function generateDialogue(
   situation: string,
-  lang: TargetLanguage
-): Promise<string[]> {
-  const result = await generateJson<{ outline: string[] }>({
-    prompt: OUTLINE_PROMPT(situation, lang),
+  language: TargetLanguage
+): Promise<Dialogue> {
+  const raw = await generateJson<RawDialogue>({
+    prompt: DIALOGUE_PROMPT(situation, language),
   });
-  return result.outline ?? [];
-}
 
-export interface AiTurnResult {
-  text: string;
-  translation: string;
-}
-
-export async function generateFirstTurn(
-  situation: string,
-  outline: string[],
-  lang: TargetLanguage
-): Promise<AiTurnResult> {
-  return generateJson<AiTurnResult>({
-    prompt: FIRST_TURN_PROMPT(situation, outline, lang),
-  });
-}
-
-export async function generateNextTurn(
-  situation: string,
-  outline: string[],
-  lang: TargetLanguage,
-  history: Message[]
-): Promise<AiTurnResult> {
-  return generateJson<AiTurnResult>({
-    prompt: NEXT_TURN_PROMPT(situation, outline, lang, history),
-  });
-}
-
-export interface HelpResult {
-  suggestions: { text: string; translation: string }[];
-  explanation: string;
-}
-
-export async function getHelp(
-  situation: string,
-  outline: string[],
-  lang: TargetLanguage,
-  history: Message[]
-): Promise<HelpResult> {
-  return generateJson<HelpResult>({
-    prompt: HELP_PROMPT(situation, outline, lang, history),
-  });
-}
-
-export async function answerQuestion(
-  lang: TargetLanguage,
-  history: Message[],
-  targetMessage: Message,
-  question: string
-): Promise<string> {
-  const result = await generateJson<{ answer: string }>({
-    prompt: QUESTION_PROMPT(lang, history, targetMessage, question),
-  });
-  return result.answer;
-}
-
-export async function checkResponse(
-  lang: TargetLanguage,
-  history: Message[],
-  userText: string
-): Promise<Correction> {
-  return generateJson<Correction>({
-    prompt: CHECK_PROMPT(lang, history, userText),
-  });
-}
-
-export async function extractVocab(
-  lang: TargetLanguage,
-  situation: string,
-  history: Message[],
-  sessionId: string
-): Promise<VocabEntry[]> {
-  const result = await generateJson<{
-    items: { phrase: string; meaning_ja: string; example?: string }[];
-  }>({
-    prompt: VOCAB_PROMPT(lang, situation, history),
-  });
-  const now = Date.now();
-  return (result.items ?? []).map((it) => ({
+  const lines: DialogueLine[] = (raw.lines ?? []).map((line) => ({
     id: uid(),
-    language: lang,
-    phrase: it.phrase,
-    meaningJa: it.meaning_ja,
-    example: it.example,
-    sourceSessionId: sessionId,
-    sourceSituation: situation,
-    createdAt: now,
+    speaker: line.speaker?.trim() || '—',
+    template: line.template ?? '',
+    translation: line.translation ?? '',
+    slots: (line.slots ?? []).map((slot) => ({
+      original: slot.original ?? '',
+      translation: slot.translation ?? '',
+      alternatives: (slot.alternatives ?? [])
+        .filter((alt) => (alt.text ?? '').trim().length > 0)
+        .map((alt) => ({
+          text: alt.text ?? '',
+          translation: alt.translation ?? '',
+        })),
+    })),
   }));
+
+  if (lines.length === 0) {
+    throw new Error('AIが会話を生成できませんでした。シチュエーションを少し具体的にして再試行してください。');
+  }
+
+  return {
+    id: uid(),
+    language,
+    situation: situation.trim(),
+    title: raw.title?.trim() || situation.trim().slice(0, 24),
+    lines,
+    createdAt: Date.now(),
+  };
 }
 
-/**
- * Returns a base64-encoded PCM WAV-compatible audio payload from Gemini TTS.
- * Throws on failure (caller may fall back to browser TTS).
- */
 export async function geminiTts(text: string): Promise<{ data: string; mimeType: string }> {
   return withKeyRotation(async (apiKey) => {
     const ai = client(apiKey);

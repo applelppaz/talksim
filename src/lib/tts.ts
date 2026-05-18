@@ -4,6 +4,7 @@ import { geminiTts } from './gemini';
 let currentUtter: SpeechSynthesisUtterance | null = null;
 let currentSource: AudioBufferSourceNode | null = null;
 let audioCtx: AudioContext | null = null;
+let sequenceToken = 0;
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
@@ -18,6 +19,7 @@ function getAudioContext(): AudioContext {
 }
 
 export function stopSpeaking(): void {
+  sequenceToken += 1;
   if (typeof window === 'undefined') return;
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
@@ -41,7 +43,6 @@ async function speakBrowser(text: string, lang: TargetLanguage, preferredVoice?:
   if (!browserTtsSupported()) {
     throw new Error('このブラウザは音声合成（TTS）に対応していません。');
   }
-  stopSpeaking();
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = LANGUAGES[lang].bcp47;
   utter.rate = 1;
@@ -65,7 +66,6 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 
 function parseGeminiPcmMime(mime: string): { sampleRate: number; channels: number } {
-  // Gemini TTS returns something like "audio/L16;rate=24000" (16-bit signed PCM).
   let sampleRate = 24000;
   let channels = 1;
   const parts = mime.split(';').map((p) => p.trim());
@@ -97,10 +97,11 @@ async function speakGemini(text: string): Promise<void> {
     }
     audioBuffer = buf;
   } else {
-    audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    audioBuffer = await ctx.decodeAudioData(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+    );
   }
 
-  stopSpeaking();
   const src = ctx.createBufferSource();
   src.buffer = audioBuffer;
   src.connect(ctx.destination);
@@ -118,6 +119,7 @@ export async function speak(
   preferredVoice?: string
 ): Promise<void> {
   if (!text.trim()) return;
+  stopSpeaking();
   if (mode === 'gemini') {
     try {
       await speakGemini(text);
@@ -127,4 +129,41 @@ export async function speak(
     }
   }
   await speakBrowser(text, lang, preferredVoice);
+}
+
+export interface SequenceItem {
+  text: string;
+  onStart?: () => void;
+  onEnd?: () => void;
+}
+
+export async function speakSequence(
+  items: SequenceItem[],
+  lang: TargetLanguage,
+  mode: TtsMode,
+  preferredVoice?: string,
+  gapMs = 400
+): Promise<void> {
+  stopSpeaking();
+  const token = sequenceToken;
+  for (const item of items) {
+    if (token !== sequenceToken) return;
+    item.onStart?.();
+    try {
+      if (mode === 'gemini') {
+        try {
+          await speakGemini(item.text);
+        } catch (err) {
+          console.warn('Gemini TTS failed in sequence, falling back', err);
+          await speakBrowser(item.text, lang, preferredVoice);
+        }
+      } else {
+        await speakBrowser(item.text, lang, preferredVoice);
+      }
+    } finally {
+      item.onEnd?.();
+    }
+    if (token !== sequenceToken) return;
+    if (gapMs > 0) await new Promise((r) => setTimeout(r, gapMs));
+  }
 }

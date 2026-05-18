@@ -7,44 +7,35 @@ export const LANGUAGES: Record<TargetLanguage, { label: string; bcp47: string; n
   fr: { label: 'フランス語', bcp47: 'fr-FR', nativeName: 'Français' },
 };
 
-export type MessageRole = 'ai' | 'user';
-
-export interface Message {
-  id: string;
-  role: MessageRole;
+export interface VocabAlternative {
   text: string;
-  translation?: string;
-  correction?: Correction;
-  createdAt: number;
+  translation: string;
 }
 
-export interface Correction {
-  ok: boolean;
-  issues: string[];
-  improved?: string;
-  comment?: string;
+export interface DialogueSlot {
+  original: string;
+  translation: string;
+  alternatives: VocabAlternative[];
 }
 
-export interface ConversationSession {
+export interface DialogueLine {
+  id: string;
+  speaker: string;
+  template: string;
+  translation: string;
+  slots: DialogueSlot[];
+}
+
+export interface Dialogue {
   id: string;
   language: TargetLanguage;
   situation: string;
-  outline: string[];
-  messages: Message[];
-  startedAt: number;
-  endedAt?: number;
-}
-
-export interface VocabEntry {
-  id: string;
-  language: TargetLanguage;
-  phrase: string;
-  meaningJa: string;
-  example?: string;
-  sourceSessionId?: string;
-  sourceSituation?: string;
+  title: string;
+  lines: DialogueLine[];
   createdAt: number;
 }
+
+export type SlotSelections = Record<string, Record<number, number>>;
 
 export type TtsMode = 'browser' | 'gemini';
 

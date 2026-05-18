@@ -29,7 +29,7 @@ export function SettingsPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
         <h2 className="font-semibold">🔑 Gemini APIキー（最大3つ）</h2>
         <p className="text-xs text-slate-600">
-          無料枠の使用上限に達した場合、未使用の他キーへ自動で切り替わります。キーはこのブラウザにのみ保存され、サーバには送信されません。
+          以前のバージョンで登録したAPIキーはそのまま使えます。無料枠の使用上限に達した場合、未使用の他キーへ自動で切り替わります。キーはこのブラウザにのみ保存され、サーバには送信されません。
           <br />
           取得：
           <a
@@ -121,14 +121,14 @@ export function SettingsPage() {
             checked={settings.autoPlay}
             onChange={(e) => setAutoPlay(e.target.checked)}
           />
-          <span className="text-sm">AI発話の音声を自動再生する</span>
+          <span className="text-sm">会話生成後に自動で音声を再生する</span>
         </label>
       </section>
 
       <section className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
         <h2 className="font-semibold text-red-900">⚠ データ管理</h2>
         <p className="text-xs text-red-900">
-          全てのAPIキー・会話履歴・語彙データを削除します。元に戻せません。
+          全てのAPIキー・生成済み会話の履歴を削除します。元に戻せません。
         </p>
         <button
           onClick={() => {
