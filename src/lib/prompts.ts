@@ -4,6 +4,48 @@ function nativeName(lang: TargetLanguage): string {
   return LANGUAGES[lang].nativeName;
 }
 
+export const EVAL_PROMPT = (
+  lang: TargetLanguage,
+  speaker: string,
+  expectedText: string,
+  expectedTranslation: string,
+  userTranscript: string,
+  situation: string
+) => {
+  const native = nativeName(lang);
+  return `あなたは${native}の語学講師です。学習者がロールプレイで「${speaker}」のセリフを音読しました。下記の目標セリフと、学習者の発話（音声認識による書き起こし）を比較し、発音と応答の正確さを評価してください。
+
+【シチュエーション（日本語）】
+${situation}
+
+【目標のセリフ（${native}）】
+${expectedText}
+
+【目標のセリフの日本語訳】
+${expectedTranslation}
+
+【学習者の発話（音声認識結果、${native}）】
+${userTranscript}
+
+【評価指針】
+- 軽微なタイポ・句読点・大文字小文字の違いは無視してください。
+- 音声認識結果は学習者の発音の手がかりです。単語の取り違え・抜け・余分・並び順の崩れは「発音」または「語彙」の問題として指摘してください。
+- 目標と全く違う内容を話している場合、その内容がシチュエーション上自然な応答であれば「内容のズレ」として指摘しつつ、文脈的には許容できる旨も併記してください。
+- 指摘はできるだけ具体的に、日本語で1〜3個に絞ってください。
+- ${native}を引用する際は元の文字どおり書いてください（ローマ字化や翻訳をしない）。
+
+【出力（JSONのみ。コードブロック記号は付けない）】
+{
+  "ok": true または false（発音・内容ともに概ね問題なければ true）,
+  "score": 0〜100の整数,
+  "summary": "総評（日本語、1〜2文）",
+  "issues": [
+    { "kind": "発音 | 語彙 | 文法 | 抜け | 余分 | 内容のズレ", "detail": "具体的な内容（日本語）" }
+  ],
+  "suggestion": "次回への改善ポイント（日本語、1文）"
+}`;
+};
+
 export const DIALOGUE_PROMPT = (situation: string, lang: TargetLanguage) => {
   const native = nativeName(lang);
   return `あなたは語学教材の作成者です。日本人学習者向けに、${native}の会話例とその語彙入れ替え候補を作成してください。

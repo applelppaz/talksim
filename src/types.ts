@@ -37,6 +37,21 @@ export interface Dialogue {
 
 export type SlotSelections = Record<string, Record<number, number>>;
 
+export interface EvalIssue {
+  kind: string;
+  detail: string;
+}
+
+export interface PronunciationEval {
+  ok: boolean;
+  score: number;
+  summary: string;
+  issues: EvalIssue[];
+  suggestion?: string;
+  transcript: string;
+  expected: string;
+}
+
 export type TtsMode = 'browser' | 'gemini';
 
 export interface ApiKeyState {

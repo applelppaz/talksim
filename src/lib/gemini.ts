@@ -1,8 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { withKeyRotation } from './apiKeyManager';
-import type { Dialogue, DialogueLine, TargetLanguage } from '../types';
+import type { Dialogue, DialogueLine, PronunciationEval, TargetLanguage } from '../types';
 import { uid } from './storage';
-import { DIALOGUE_PROMPT } from './prompts';
+import { DIALOGUE_PROMPT, EVAL_PROMPT } from './prompts';
 
 const CHAT_MODEL = 'gemini-2.5-flash';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
@@ -96,6 +96,46 @@ export async function generateDialogue(
     title: raw.title?.trim() || situation.trim().slice(0, 24),
     lines,
     createdAt: Date.now(),
+  };
+}
+
+interface RawEval {
+  ok?: boolean;
+  score?: number;
+  summary?: string;
+  issues?: { kind?: string; detail?: string }[];
+  suggestion?: string;
+}
+
+export async function evaluatePronunciation(params: {
+  language: TargetLanguage;
+  speaker: string;
+  expected: string;
+  expectedTranslation: string;
+  transcript: string;
+  situation: string;
+}): Promise<PronunciationEval> {
+  const raw = await generateJson<RawEval>({
+    prompt: EVAL_PROMPT(
+      params.language,
+      params.speaker,
+      params.expected,
+      params.expectedTranslation,
+      params.transcript,
+      params.situation
+    ),
+  });
+  const score = Math.max(0, Math.min(100, Math.round(raw.score ?? 0)));
+  return {
+    ok: Boolean(raw.ok),
+    score,
+    summary: raw.summary ?? '',
+    issues: (raw.issues ?? [])
+      .filter((i) => (i.detail ?? '').trim().length > 0)
+      .map((i) => ({ kind: i.kind?.trim() || '指摘', detail: i.detail ?? '' })),
+    suggestion: raw.suggestion,
+    transcript: params.transcript,
+    expected: params.expected,
   };
 }
 
