@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { DialogueLine, PronunciationEval } from '../types';
 import { SwapSlot } from './SwapSlot';
 import { PracticeFeedback } from './PracticeFeedback';
@@ -175,7 +176,7 @@ function renderTemplate(
   selections: Record<number, number>,
   onSelect: (slotIndex: number, value: number) => void
 ) {
-  const out: (string | JSX.Element)[] = [];
+  const out: ReactNode[] = [];
   let lastIndex = 0;
   const template = line.template;
   let match: RegExpExecArray | null;

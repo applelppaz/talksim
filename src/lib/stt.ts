@@ -26,7 +26,10 @@ export function sttSupported(): boolean {
 }
 
 export interface RecognitionHandle {
+  /** Finish gracefully — use a final result if speech was detected. */
   stop: () => void;
+  /** Cancel without surfacing an error to the caller. */
+  cancel: () => void;
 }
 
 export interface RecognitionOptions {
@@ -41,7 +44,7 @@ export function startRecognition({ lang, onResult, onError, onEnd }: Recognition
   if (!Ctor) {
     onError(new Error('このブラウザは音声認識に対応していません。Chrome / Edge を推奨します。'));
     onEnd();
-    return { stop: () => {} };
+    return { stop: () => {}, cancel: () => {} };
   }
   const rec = new Ctor();
   rec.lang = LANGUAGES[lang].bcp47;
@@ -50,13 +53,14 @@ export function startRecognition({ lang, onResult, onError, onEnd }: Recognition
   rec.maxAlternatives = 1;
 
   let finished = false;
+  let cancelled = false;
   const finishOk = (text: string) => {
-    if (finished) return;
+    if (finished || cancelled) return;
     finished = true;
     onResult(text);
   };
   const finishErr = (err: Error) => {
-    if (finished) return;
+    if (finished || cancelled) return;
     finished = true;
     onError(err);
   };
@@ -67,22 +71,23 @@ export function startRecognition({ lang, onResult, onError, onEnd }: Recognition
   };
   rec.onerror = (e) => {
     const code = e?.error ?? 'unknown';
+    if (code === 'aborted') {
+      finished = true;
+      return;
+    }
     const map: Record<string, string> = {
       'not-allowed': 'マイクの使用が許可されていません。ブラウザのアドレスバー左のアイコンから許可してください。',
       'service-not-allowed': 'このブラウザでは音声認識サービスが利用できません。',
       'no-speech': '音声が検出できませんでした。もう一度話してみてください。',
       'audio-capture': 'マイクが見つかりませんでした。デバイス設定を確認してください。',
       'network': 'ネットワークエラーが発生しました。',
-      'aborted': '',
     };
-    if (code === 'aborted') {
-      finished = true;
-      return;
-    }
     finishErr(new Error(map[code] ?? `音声認識エラー（${code}）`));
   };
   rec.onend = () => {
-    if (!finished) finishErr(new Error('音声を認識できませんでした。マイクの近くで明瞭に話してください。'));
+    if (!finished && !cancelled) {
+      finishErr(new Error('音声を認識できませんでした。マイクの近くで明瞭に話してください。'));
+    }
     onEnd();
   };
 
@@ -96,6 +101,14 @@ export function startRecognition({ lang, onResult, onError, onEnd }: Recognition
     stop: () => {
       try {
         rec.stop();
+      } catch {
+        /* noop */
+      }
+    },
+    cancel: () => {
+      cancelled = true;
+      try {
+        rec.abort();
       } catch {
         /* noop */
       }

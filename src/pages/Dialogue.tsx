@@ -47,7 +47,7 @@ export function DialoguePage() {
   useEffect(() => {
     return () => {
       stopSpeaking();
-      if (recHandleRef.current) recHandleRef.current.stop();
+      if (recHandleRef.current) recHandleRef.current.cancel();
     };
   }, []);
 
@@ -85,7 +85,7 @@ export function DialoguePage() {
     setError(null);
     setLoading(true);
     stopSpeaking();
-    if (recHandleRef.current) recHandleRef.current.stop();
+    if (recHandleRef.current) recHandleRef.current.cancel();
     setPlayingAll(false);
     setPlayingLineId(null);
     try {
@@ -180,7 +180,7 @@ export function DialoguePage() {
 
   const loadFromHistory = (d: Dialogue) => {
     stopSpeaking();
-    if (recHandleRef.current) recHandleRef.current.stop();
+    if (recHandleRef.current) recHandleRef.current.cancel();
     setPlayingAll(false);
     setPlayingLineId(null);
     autoPlayedFor.current = d.id;
@@ -194,7 +194,7 @@ export function DialoguePage() {
 
   const stopAnyRecording = useCallback(() => {
     if (recHandleRef.current) {
-      recHandleRef.current.stop();
+      recHandleRef.current.cancel();
       recHandleRef.current = null;
     }
     const id = activeRecLineRef.current;
