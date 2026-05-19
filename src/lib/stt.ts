@@ -42,7 +42,7 @@ export interface RecognitionOptions {
 export function startRecognition({ lang, onResult, onError, onEnd }: RecognitionOptions): RecognitionHandle {
   const Ctor = getCtor();
   if (!Ctor) {
-    onError(new Error('このブラウザは音声認識に対応していません。Chrome / Edge を推奨します。'));
+    onError(new Error('Speech recognition is not available in this browser. Chrome or Edge is recommended.'));
     onEnd();
     return { stop: () => {}, cancel: () => {} };
   }
@@ -76,17 +76,17 @@ export function startRecognition({ lang, onResult, onError, onEnd }: Recognition
       return;
     }
     const map: Record<string, string> = {
-      'not-allowed': 'マイクの使用が許可されていません。ブラウザのアドレスバー左のアイコンから許可してください。',
-      'service-not-allowed': 'このブラウザでは音声認識サービスが利用できません。',
-      'no-speech': '音声が検出できませんでした。もう一度話してみてください。',
-      'audio-capture': 'マイクが見つかりませんでした。デバイス設定を確認してください。',
-      'network': 'ネットワークエラーが発生しました。',
+      'not-allowed': 'Microphone access denied. Allow it from the icon in your browser address bar.',
+      'service-not-allowed': 'Speech recognition is unavailable in this browser.',
+      'no-speech': 'No speech detected. Please try again.',
+      'audio-capture': 'No microphone found. Check your device settings.',
+      'network': 'Network error while recognizing speech.',
     };
-    finishErr(new Error(map[code] ?? `音声認識エラー（${code}）`));
+    finishErr(new Error(map[code] ?? `Speech recognition error (${code}).`));
   };
   rec.onend = () => {
     if (!finished && !cancelled) {
-      finishErr(new Error('音声を認識できませんでした。マイクの近くで明瞭に話してください。'));
+      finishErr(new Error('Could not recognize your speech. Try speaking clearly near the microphone.'));
     }
     onEnd();
   };

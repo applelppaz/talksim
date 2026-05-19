@@ -5,14 +5,14 @@ const QUOTA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export class NoUsableKeyError extends Error {
   constructor() {
-    super('利用可能なAPIキーがありません。設定画面でAPIキーを登録するか、上限の解除をお待ちください。');
+    super('No usable API key. Register one in Settings or wait for a quota cooldown to finish.');
     this.name = 'NoUsableKeyError';
   }
 }
 
 export class AllKeysExhaustedError extends Error {
   constructor() {
-    super('登録されている全てのAPIキーが本日の上限に達しました。明日以降に再度お試しください。');
+    super('All registered API keys have hit their daily quota. Please try again later.');
     this.name = 'AllKeysExhaustedError';
   }
 }
@@ -83,7 +83,7 @@ export function isAuthError(err: unknown): boolean {
  */
 export async function withKeyRotation<T>(op: (apiKey: string) => Promise<T>): Promise<T> {
   if (!hasAnyKey()) throw new NoUsableKeyError();
-  let usable = listUsableKeys();
+  const usable = listUsableKeys();
   if (usable.length === 0) throw new AllKeysExhaustedError();
   let lastErr: unknown;
   for (const { index, key } of usable) {

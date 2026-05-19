@@ -64,7 +64,7 @@ export function DialogueLineCard({
             </span>
             <span>{line.speaker}</span>
             {isUser && (
-              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px]">あなた</span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px]">You</span>
             )}
           </div>
           <div className="flex gap-1">
@@ -72,9 +72,9 @@ export function DialogueLineCard({
               type="button"
               onClick={onSpeak}
               className="text-xs px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700"
-              title="この行を再生"
+              title="Play this line"
             >
-              🔊 模範
+              🔊 Play
             </button>
             {isUser && (
               <MicButton
@@ -90,18 +90,18 @@ export function DialogueLineCard({
 
         {isUser && recError && !evalResult && recordState === 'idle' && (
           <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800 flex items-center justify-between gap-2">
-            <span>⚠ {recError}</span>
+            <span>{recError}</span>
             <button
               type="button"
               onClick={onRetryRecord}
               className="px-2 py-0.5 rounded bg-rose-600 text-white hover:bg-rose-700"
             >
-              もう一度
+              Retry
             </button>
           </div>
         )}
         {isUser && recordState === 'processing' && !evalResult && (
-          <div className="mt-2 text-xs text-slate-600">AIが発音と内容をチェック中…</div>
+          <div className="mt-2 text-xs text-slate-600">Evaluating your pronunciation…</div>
         )}
         {evalResult && (
           <PracticeFeedback
@@ -117,7 +117,7 @@ export function DialogueLineCard({
               onClick={onAdvance}
               className="text-xs px-3 py-1 rounded bg-slate-900 text-white hover:bg-slate-700"
             >
-              {evalResult ? '次へ →' : 'スキップ →'}
+              {evalResult ? 'Next →' : 'Skip →'}
             </button>
           </div>
         )}
@@ -141,10 +141,10 @@ function MicButton({
         type="button"
         onClick={onStop}
         className="text-xs px-2 py-1 rounded-md bg-rose-600 text-white hover:bg-rose-700 inline-flex items-center gap-1"
-        title="録音を停止"
+        title="Stop recording"
       >
         <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" />
-        録音中
+        Recording
       </button>
     );
   }
@@ -155,7 +155,7 @@ function MicButton({
         disabled
         className="text-xs px-2 py-1 rounded-md bg-slate-200 text-slate-500"
       >
-        ⏳ 評価中
+        Evaluating…
       </button>
     );
   }
@@ -164,9 +164,9 @@ function MicButton({
       type="button"
       onClick={onStart}
       className="text-xs px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
-      title="自分のセリフを録音して評価"
+      title="Record your line for evaluation"
     >
-      🎤 録音
+      🎤 Record
     </button>
   );
 }

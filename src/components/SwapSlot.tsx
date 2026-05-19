@@ -53,13 +53,13 @@ export function SwapSlot({ slot, selected, onSelect }: Props) {
       {open && (
         <span className="absolute z-20 mt-1 left-0 min-w-[14rem] max-w-[20rem] max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl text-sm">
           <span className="block px-3 py-1.5 text-[10px] uppercase tracking-wide text-slate-500 bg-slate-50 border-b">
-            入れ替え候補（{slot.alternatives.length + 1}）
+            Swap options ({slot.alternatives.length + 1})
           </span>
           <Option
             label={slot.original}
             sub={slot.translation}
             isCurrent={selected === -1}
-            marker="元"
+            marker="•"
             onClick={() => {
               onSelect(-1);
               setOpen(false);

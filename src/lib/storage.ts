@@ -1,4 +1,5 @@
-import type { AppSettings, Dialogue } from '../types';
+import type { AppSettings, Difficulty, Dialogue, TtsMode } from '../types';
+import { DIFFICULTIES } from '../types';
 
 const KEYS = {
   settings: 'talksim:settings',
@@ -13,7 +14,16 @@ const DEFAULT_SETTINGS: AppSettings = {
   ],
   ttsMode: 'browser',
   autoPlay: true,
+  difficulty: 'intermediate',
 };
+
+function isDifficulty(v: unknown): v is Difficulty {
+  return typeof v === 'string' && v in DIFFICULTIES;
+}
+
+function isTtsMode(v: unknown): v is TtsMode {
+  return v === 'browser' || v === 'gemini';
+}
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -34,14 +44,19 @@ export const storage = {
     const s = read<AppSettings>(KEYS.settings, DEFAULT_SETTINGS);
     while (s.apiKeys.length < 3) s.apiKeys.push({ key: '' });
     if (typeof s.autoPlay !== 'boolean') s.autoPlay = true;
-    if (s.ttsMode !== 'browser' && s.ttsMode !== 'gemini') s.ttsMode = 'browser';
+    if (!isTtsMode(s.ttsMode)) s.ttsMode = 'browser';
+    if (!isDifficulty(s.difficulty)) s.difficulty = 'intermediate';
     return s;
   },
   saveSettings(s: AppSettings): void {
     write(KEYS.settings, s);
   },
   loadDialogues(): Dialogue[] {
-    return read<Dialogue[]>(KEYS.dialogues, []);
+    const list = read<Dialogue[]>(KEYS.dialogues, []);
+    return list.map((d) => ({
+      ...d,
+      difficulty: isDifficulty(d.difficulty) ? d.difficulty : 'intermediate',
+    }));
   },
   saveDialogues(d: Dialogue[]): void {
     write(KEYS.dialogues, d);
