@@ -49,6 +49,12 @@ export function PracticeFeedback({ result, onRetry, onDismiss }: Props) {
           <div className="text-slate-800 break-words">{result.transcript || '(not recognized)'}</div>
         </div>
       </div>
+      {result.corrected && (
+        <div className="mt-2 rounded bg-emerald-50 border border-emerald-200 p-2">
+          <div className="text-[10px] uppercase tracking-wide text-emerald-700 mb-0.5">Corrected version</div>
+          <div className="text-emerald-900 break-words font-medium">{result.corrected}</div>
+        </div>
+      )}
       {result.issues.length > 0 && (
         <ul className="mt-2 space-y-1">
           {result.issues.map((iss, i) => (

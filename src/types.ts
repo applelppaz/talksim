@@ -70,6 +70,8 @@ export interface PronunciationEval {
   summary: string;
   issues: EvalIssue[];
   suggestion?: string;
+  /** A corrected version of what the learner actually said, when their utterance has grammar or usage errors. */
+  corrected?: string;
   transcript: string;
   expected: string;
 }

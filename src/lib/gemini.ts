@@ -106,6 +106,7 @@ interface RawEval {
   score?: number;
   summary?: string;
   issues?: { kind?: string; detail?: string }[];
+  corrected?: string | null;
   suggestion?: string;
 }
 
@@ -128,6 +129,11 @@ export async function evaluatePronunciation(params: {
     ),
   });
   const score = Math.max(0, Math.min(100, Math.round(raw.score ?? 0)));
+  const correctedRaw = typeof raw.corrected === 'string' ? raw.corrected.trim() : '';
+  const corrected =
+    correctedRaw.length > 0 && correctedRaw.toLowerCase() !== 'null' && correctedRaw !== params.transcript.trim()
+      ? correctedRaw
+      : undefined;
   return {
     ok: Boolean(raw.ok),
     score,
@@ -136,6 +142,7 @@ export async function evaluatePronunciation(params: {
       .filter((i) => (i.detail ?? '').trim().length > 0)
       .map((i) => ({ kind: i.kind?.trim() || 'Note', detail: i.detail ?? '' })),
     suggestion: raw.suggestion,
+    corrected,
     transcript: params.transcript,
     expected: params.expected,
   };

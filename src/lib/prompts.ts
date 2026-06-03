@@ -71,7 +71,7 @@ export const EVAL_PROMPT = (
   situation: string
 ) => {
   const native = nativeName(lang);
-  return `You are a ${native} language tutor. A learner role-played as "${speaker}" and attempted the target line below. Compare the target with the learner's spoken transcript (from speech-to-text) and evaluate pronunciation and accuracy.
+  return `You are a ${native} language tutor. A learner role-played as "${speaker}" and attempted the target line below. Compare the target with the learner's spoken transcript (from speech-to-text) AND independently audit the learner's utterance for any grammar, vocabulary, or usage errors of its own.
 
 [Situation]
 ${situation}
@@ -87,19 +87,21 @@ ${userTranscript}
 
 [Guidelines]
 - Ignore minor typos, punctuation, and case differences.
-- The transcript is your only window into the learner's pronunciation. Word swaps, omissions, additions, or scrambled order should be flagged as "Pronunciation" or "Vocabulary".
-- If the learner said something entirely different but contextually appropriate, flag "Content drift" and note that the alternative is acceptable.
-- Be specific. 1–3 issues maximum. Respond in English.
+- The transcript is your only window into the learner's pronunciation. Word swaps, omissions, additions, or scrambled order vs. the target should be flagged as "Pronunciation" or "Vocabulary".
+- ALSO check the learner's utterance on its own merits. Even if the learner said something different from the target but contextually appropriate, flag any standalone grammar, conjugation, agreement, article, preposition, word-order, or natural-usage errors as "Grammar" or "Usage" — do not let "Content drift" hide a broken sentence.
+- If the learner's utterance contains any error you flagged, set "corrected" to the fully fixed ${native} version of what they said (keep their intended meaning and register; do not snap it back to the target line). If their utterance is already grammatical and natural, set "corrected" to null.
+- Be specific. 1–4 issues maximum. Respond in English.
 - When quoting ${native}, use the original script (no romanization, no translation).
 
 [Output: JSON only. No code fences, no commentary.]
 {
-  "ok": true or false (true if pronunciation and content are both broadly acceptable),
+  "ok": true or false (true if pronunciation, content, and standalone grammar are all broadly acceptable),
   "score": integer 0–100,
   "summary": "1–2 sentence overall comment in English",
   "issues": [
-    { "kind": "Pronunciation | Vocabulary | Grammar | Omission | Addition | Content drift", "detail": "concise English explanation" }
+    { "kind": "Pronunciation | Vocabulary | Grammar | Usage | Omission | Addition | Content drift", "detail": "concise English explanation, quote the offending ${native} phrase when helpful" }
   ],
+  "corrected": "Corrected ${native} version of the learner's utterance, or null",
   "suggestion": "one-line tip for next time, in English"
 }`;
 };
