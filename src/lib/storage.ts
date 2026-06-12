@@ -1,20 +1,27 @@
-import type { AppSettings, Difficulty, Dialogue, TtsMode } from '../types';
+import type {
+  AppMode,
+  AppSettings,
+  ConversationSession,
+  Difficulty,
+  Dialogue,
+  TtsMode,
+  VocabEntry,
+} from '../types';
 import { DIFFICULTIES } from '../types';
 
 const KEYS = {
   settings: 'talksim:settings',
   dialogues: 'talksim:dialogues',
+  sessions: 'talksim:sessions',
+  vocab: 'talksim:vocab',
 } as const;
 
 const DEFAULT_SETTINGS: AppSettings = {
-  apiKeys: [
-    { key: '' },
-    { key: '' },
-    { key: '' },
-  ],
+  apiKeys: [{ key: '' }, { key: '' }, { key: '' }],
   ttsMode: 'browser',
   autoPlay: true,
   difficulty: 'intermediate',
+  mode: 'practice',
 };
 
 function isDifficulty(v: unknown): v is Difficulty {
@@ -23,6 +30,10 @@ function isDifficulty(v: unknown): v is Difficulty {
 
 function isTtsMode(v: unknown): v is TtsMode {
   return v === 'browser' || v === 'gemini';
+}
+
+function isMode(v: unknown): v is AppMode {
+  return v === 'practice' || v === 'chat';
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -46,6 +57,7 @@ export const storage = {
     if (typeof s.autoPlay !== 'boolean') s.autoPlay = true;
     if (!isTtsMode(s.ttsMode)) s.ttsMode = 'browser';
     if (!isDifficulty(s.difficulty)) s.difficulty = 'intermediate';
+    if (!isMode(s.mode)) s.mode = 'practice';
     return s;
   },
   saveSettings(s: AppSettings): void {
@@ -60,6 +72,18 @@ export const storage = {
   },
   saveDialogues(d: Dialogue[]): void {
     write(KEYS.dialogues, d);
+  },
+  loadSessions(): ConversationSession[] {
+    return read<ConversationSession[]>(KEYS.sessions, []);
+  },
+  saveSessions(s: ConversationSession[]): void {
+    write(KEYS.sessions, s);
+  },
+  loadVocab(): VocabEntry[] {
+    return read<VocabEntry[]>(KEYS.vocab, []);
+  },
+  saveVocab(v: VocabEntry[]): void {
+    write(KEYS.vocab, v);
   },
   clearAll(): void {
     Object.values(KEYS).forEach((k) => localStorage.removeItem(k));

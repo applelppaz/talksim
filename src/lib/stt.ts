@@ -115,3 +115,71 @@ export function startRecognition({ lang, onResult, onError, onEnd }: Recognition
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Chat-mode helper: continuous voice input with interim results.
+// ---------------------------------------------------------------------------
+
+export interface SttHandle {
+  stop: () => void;
+}
+
+export interface SttCallbacks {
+  onInterim?: (text: string) => void;
+  onFinal: (text: string) => void;
+  onError?: (msg: string) => void;
+  onEnd?: () => void;
+}
+
+export function startListening(lang: TargetLanguage, cb: SttCallbacks): SttHandle {
+  const Ctor = getCtor();
+  if (!Ctor) {
+    cb.onError?.('このブラウザは音声認識に対応していません。');
+    return { stop: () => {} };
+  }
+  const rec = new Ctor();
+  rec.lang = LANGUAGES[lang].bcp47;
+  rec.continuous = false;
+  rec.interimResults = true;
+
+  let finalText = '';
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rec.onresult = (ev: any) => {
+    let interim = '';
+    for (let i = ev.resultIndex ?? 0; i < ev.results.length; i += 1) {
+      const result = ev.results[i];
+      const alts = result as unknown as ArrayLike<{ transcript?: string }>;
+      const text = alts[0]?.transcript ?? '';
+      if (result.isFinal) {
+        finalText += text;
+      } else {
+        interim += text;
+      }
+    }
+    if (interim) cb.onInterim?.(finalText + interim);
+  };
+  rec.onerror = (ev) => {
+    cb.onError?.(ev?.message || ev?.error || '音声認識でエラーが発生しました。');
+  };
+  rec.onend = () => {
+    if (finalText.trim()) cb.onFinal(finalText.trim());
+    cb.onEnd?.();
+  };
+
+  try {
+    rec.start();
+  } catch (err) {
+    cb.onError?.(err instanceof Error ? err.message : '音声認識を開始できませんでした。');
+  }
+
+  return {
+    stop: () => {
+      try {
+        rec.stop();
+      } catch {
+        /* noop */
+      }
+    },
+  };
+}

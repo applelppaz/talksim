@@ -1,8 +1,27 @@
 import { GoogleGenAI } from '@google/genai';
 import { withKeyRotation } from './apiKeyManager';
-import type { Difficulty, Dialogue, DialogueLine, PronunciationEval, TargetLanguage } from '../types';
+import type {
+  Correction,
+  Difficulty,
+  Dialogue,
+  DialogueLine,
+  Message,
+  PronunciationEval,
+  TargetLanguage,
+  VocabEntry,
+} from '../types';
 import { uid } from './storage';
-import { DIALOGUE_PROMPT, EVAL_PROMPT } from './prompts';
+import {
+  CHECK_PROMPT,
+  DIALOGUE_PROMPT,
+  EVAL_PROMPT,
+  FIRST_TURN_PROMPT,
+  HELP_PROMPT,
+  NEXT_TURN_PROMPT,
+  OUTLINE_PROMPT,
+  QUESTION_PROMPT,
+  VOCAB_PROMPT,
+} from './prompts';
 
 const CHAT_MODEL = 'gemini-2.5-flash';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
@@ -165,4 +184,93 @@ export async function geminiTts(text: string): Promise<{ data: string; mimeType:
     }
     return { data: inline.data, mimeType: inline.mimeType ?? 'audio/pcm' };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Chat-mode helpers (legacy roleplay chat).
+// ---------------------------------------------------------------------------
+
+export async function generateOutline(situation: string, lang: TargetLanguage): Promise<string[]> {
+  const result = await generateJson<{ outline: string[] }>({
+    prompt: OUTLINE_PROMPT(situation, lang),
+  });
+  return result.outline ?? [];
+}
+
+export interface AiTurnResult {
+  text: string;
+  translation: string;
+}
+
+export async function generateFirstTurn(
+  situation: string,
+  outline: string[],
+  lang: TargetLanguage
+): Promise<AiTurnResult> {
+  return generateJson<AiTurnResult>({ prompt: FIRST_TURN_PROMPT(situation, outline, lang) });
+}
+
+export async function generateNextTurn(
+  situation: string,
+  outline: string[],
+  lang: TargetLanguage,
+  history: Message[]
+): Promise<AiTurnResult> {
+  return generateJson<AiTurnResult>({ prompt: NEXT_TURN_PROMPT(situation, outline, lang, history) });
+}
+
+export interface HelpResult {
+  suggestions: { text: string; translation: string }[];
+  explanation: string;
+}
+
+export async function getHelp(
+  situation: string,
+  outline: string[],
+  lang: TargetLanguage,
+  history: Message[]
+): Promise<HelpResult> {
+  return generateJson<HelpResult>({ prompt: HELP_PROMPT(situation, outline, lang, history) });
+}
+
+export async function answerQuestion(
+  lang: TargetLanguage,
+  history: Message[],
+  targetMessage: Message,
+  question: string
+): Promise<string> {
+  const result = await generateJson<{ answer: string }>({
+    prompt: QUESTION_PROMPT(lang, history, targetMessage, question),
+  });
+  return result.answer;
+}
+
+export async function checkResponse(
+  lang: TargetLanguage,
+  history: Message[],
+  userText: string
+): Promise<Correction> {
+  return generateJson<Correction>({ prompt: CHECK_PROMPT(lang, history, userText) });
+}
+
+export async function extractVocab(
+  lang: TargetLanguage,
+  situation: string,
+  history: Message[],
+  sessionId: string
+): Promise<VocabEntry[]> {
+  const result = await generateJson<{
+    items: { phrase: string; meaning_ja: string; example?: string }[];
+  }>({ prompt: VOCAB_PROMPT(lang, situation, history) });
+  const now = Date.now();
+  return (result.items ?? []).map((it) => ({
+    id: uid(),
+    language: lang,
+    phrase: it.phrase,
+    meaningJa: it.meaning_ja,
+    example: it.example,
+    sourceSessionId: sessionId,
+    sourceSituation: situation,
+    createdAt: now,
+  }));
 }

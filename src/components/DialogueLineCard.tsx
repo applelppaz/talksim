@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ChevronRight, Loader2, Mic, Volume2 } from 'lucide-react';
 import type { DialogueLine, PronunciationEval } from '../types';
 import { SwapSlot } from './SwapSlot';
 import { PracticeFeedback } from './PracticeFeedback';
@@ -47,61 +48,51 @@ export function DialogueLineCard({
   const parts = renderTemplate(line, selections, onSelect);
 
   const cardClass = isActive
-    ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
+    ? 'border-amber-300/80 bg-amber-50/80 ring-2 ring-amber-200/60'
     : isPlaying
-    ? 'border-sky-400 bg-sky-50 ring-2 ring-sky-200'
-    : isUser
-    ? 'border-emerald-200 bg-white'
-    : 'border-slate-200 bg-white';
+    ? 'border-sky-300/80 bg-sky-50/80 ring-2 ring-sky-200/60'
+    : 'border-white/60 bg-white/70';
 
   return (
     <div className={`flex ${alignRight ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[92%] rounded-2xl border p-3 shadow-sm transition ${cardClass}`}>
+      <div className={`relative max-w-[94%] rounded-3xl border backdrop-blur-xl p-3 shadow-sm shadow-slate-900/5 transition ${cardClass}`}>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
-            <span className="inline-block w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] leading-5 text-center">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-900 text-white text-[10px]">
               {index + 1}
             </span>
             <span>{line.speaker}</span>
             {isUser && (
-              <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px]">You</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px]">You</span>
             )}
           </div>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={onSpeak}
-              className="text-xs px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700"
-              title="Play this line"
-            >
-              🔊 Play
-            </button>
-            {isUser && (
-              <MicButton
-                state={recordState}
-                onStart={onStartRecord}
-                onStop={onStopRecord}
-              />
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={onSpeak}
+            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/70 hover:bg-white border border-white/60 text-slate-700"
+            title="Play this line"
+          >
+            <Volume2 size={14} />
+          </button>
         </div>
-        <p className="text-lg leading-relaxed break-words">{parts}</p>
+        <p className="text-[17px] leading-relaxed break-words text-slate-900">{parts}</p>
         <p className="text-xs text-slate-500 mt-1.5 break-words">{line.translation}</p>
 
-        {isUser && recError && !evalResult && recordState === 'idle' && (
-          <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800 flex items-center justify-between gap-2">
-            <span>{recError}</span>
-            <button
-              type="button"
-              onClick={onRetryRecord}
-              className="px-2 py-0.5 rounded bg-rose-600 text-white hover:bg-rose-700"
-            >
-              Retry
-            </button>
+        {/* User-line: big circular mic */}
+        {isUser && (
+          <div className="mt-3 flex items-center justify-end gap-2">
+            {recError && !evalResult && recordState === 'idle' && (
+              <span className="text-[11px] text-rose-700 max-w-[60%] truncate">{recError}</span>
+            )}
+            <MicButton
+              state={recordState}
+              onStart={onStartRecord}
+              onStop={onStopRecord}
+            />
           </div>
         )}
         {isUser && recordState === 'processing' && !evalResult && (
-          <div className="mt-2 text-xs text-slate-600">Evaluating your pronunciation…</div>
+          <div className="mt-2 text-xs text-slate-600">Evaluating…</div>
         )}
         {evalResult && (
           <PracticeFeedback
@@ -115,9 +106,10 @@ export function DialogueLineCard({
             <button
               type="button"
               onClick={onAdvance}
-              className="text-xs px-3 py-1 rounded bg-slate-900 text-white hover:bg-slate-700"
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-slate-900 text-white hover:bg-slate-800"
             >
-              {evalResult ? 'Next →' : 'Skip →'}
+              {evalResult ? 'Next' : 'Skip'}
+              <ChevronRight size={14} />
             </button>
           </div>
         )}
@@ -140,11 +132,11 @@ function MicButton({
       <button
         type="button"
         onClick={onStop}
-        className="text-xs px-2 py-1 rounded-md bg-rose-600 text-white hover:bg-rose-700 inline-flex items-center gap-1"
+        className="relative inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-300/50"
         title="Stop recording"
       >
-        <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" />
-        Recording
+        <span className="absolute inset-0 rounded-full bg-rose-400/40 animate-ping" />
+        <Mic size={22} strokeWidth={2.4} className="relative" />
       </button>
     );
   }
@@ -153,9 +145,9 @@ function MicButton({
       <button
         type="button"
         disabled
-        className="text-xs px-2 py-1 rounded-md bg-slate-200 text-slate-500"
+        className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-slate-200 text-slate-500"
       >
-        Evaluating…
+        <Loader2 size={22} className="animate-spin" />
       </button>
     );
   }
@@ -163,10 +155,10 @@ function MicButton({
     <button
       type="button"
       onClick={onStart}
-      className="text-xs px-2 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+      className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-300/50 hover:brightness-110"
       title="Record your line for evaluation"
     >
-      🎤 Record
+      <Mic size={22} strokeWidth={2.4} />
     </button>
   );
 }

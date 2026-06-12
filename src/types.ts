@@ -28,6 +28,10 @@ export const DIFFICULTIES: Record<Difficulty, { label: string; hint: string }> =
   },
 };
 
+export type AppMode = 'practice' | 'chat';
+
+// --- Practice mode (current dialogue-generation app) ---
+
 export interface VocabAlternative {
   text: string;
   translation: string;
@@ -76,6 +80,49 @@ export interface PronunciationEval {
   expected: string;
 }
 
+// --- Chat mode (legacy roleplay chat) ---
+
+export type MessageRole = 'ai' | 'user';
+
+export interface Message {
+  id: string;
+  role: MessageRole;
+  text: string;
+  translation?: string;
+  correction?: Correction;
+  createdAt: number;
+}
+
+export interface Correction {
+  ok: boolean;
+  issues: string[];
+  improved?: string;
+  comment?: string;
+}
+
+export interface ConversationSession {
+  id: string;
+  language: TargetLanguage;
+  situation: string;
+  outline: string[];
+  messages: Message[];
+  startedAt: number;
+  endedAt?: number;
+}
+
+export interface VocabEntry {
+  id: string;
+  language: TargetLanguage;
+  phrase: string;
+  meaningJa: string;
+  example?: string;
+  sourceSessionId?: string;
+  sourceSituation?: string;
+  createdAt: number;
+}
+
+// --- Shared ---
+
 export type TtsMode = 'browser' | 'gemini';
 
 export interface ApiKeyState {
@@ -89,5 +136,6 @@ export interface AppSettings {
   ttsMode: TtsMode;
   autoPlay: boolean;
   difficulty: Difficulty;
+  mode: AppMode;
   voicePreference?: string;
 }

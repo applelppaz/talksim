@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff, KeyRound, Trash2, Volume2 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import type { TtsMode } from '../types';
 
@@ -9,135 +10,195 @@ export function SettingsPage() {
   const [reveal, setReveal] = useState<boolean[]>(() => settings.apiKeys.map(() => false));
 
   const updateKey = (index: number, key: string) => {
-    const next = { ...settings, apiKeys: settings.apiKeys.map((k, i) => (i === index ? { ...k, key } : k)) };
-    setSettings(next);
+    setSettings({
+      ...settings,
+      apiKeys: settings.apiKeys.map((k, i) => (i === index ? { ...k, key } : k)),
+    });
   };
 
   const clearExhausted = (index: number) => {
-    const next = {
+    setSettings({
       ...settings,
-      apiKeys: settings.apiKeys.map((k, i) => (i === index ? { ...k, exhaustedAt: undefined } : k)),
-    };
-    setSettings(next);
+      apiKeys: settings.apiKeys.map((k, i) =>
+        i === index ? { ...k, exhaustedAt: undefined } : k
+      ),
+    });
   };
 
   const setTtsMode = (mode: TtsMode) => setSettings({ ...settings, ttsMode: mode });
   const setAutoPlay = (autoPlay: boolean) => setSettings({ ...settings, autoPlay });
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <h2 className="font-semibold">Gemini API keys (up to 3)</h2>
-        <p className="text-xs text-slate-600">
-          Keys are stored only in this browser and never sent to a server. When one key hits its daily quota the app switches to the next unused key automatically. Get a key from{' '}
+    <div className="space-y-4">
+      <Glass>
+        <SectionLabel icon={<KeyRound size={14} />}>Gemini API keys</SectionLabel>
+        <p className="text-xs text-slate-600 mt-1.5">
+          Stored only in this browser. When a key hits its daily quota, TalkSim rotates to the next.{' '}
           <a
             className="text-sky-700 underline"
             href="https://aistudio.google.com/apikey"
             target="_blank"
             rel="noreferrer"
           >
-            Google AI Studio
+            Get a key
           </a>
-          .
         </p>
-        <div className="space-y-2">
+        <div className="mt-2.5 space-y-1.5">
           {settings.apiKeys.map((state, i) => {
             const cooldownRemaining = state.exhaustedAt
-              ? Math.max(0, COOLDOWN_HOURS - (Date.now() - state.exhaustedAt) / (1000 * 60 * 60))
+              ? Math.max(
+                  0,
+                  COOLDOWN_HOURS - (Date.now() - state.exhaustedAt) / (1000 * 60 * 60)
+                )
               : 0;
             return (
-              <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
+              <div
+                key={i}
+                className="rounded-2xl border border-white/60 bg-white/60 backdrop-blur p-2.5 space-y-1.5"
+              >
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-slate-600">Key {i + 1}</div>
+                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
+                    Key {i + 1}
+                  </div>
                   {state.exhaustedAt && cooldownRemaining > 0 && (
                     <button
                       onClick={() => clearExhausted(i)}
-                      className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 hover:bg-amber-200"
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 hover:bg-amber-200"
                       title="Clear cooldown manually"
                     >
-                      ~{cooldownRemaining.toFixed(1)}h left (clear)
+                      ~{cooldownRemaining.toFixed(1)}h left
                     </button>
                   )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5 items-center">
                   <input
                     type={reveal[i] ? 'text' : 'password'}
                     value={state.key}
                     onChange={(e) => updateKey(i, e.target.value)}
                     placeholder="AIza..."
-                    className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    className="flex-1 rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-300"
                   />
                   <button
-                    onClick={() => setReveal((r) => r.map((v, j) => (j === i ? !v : v)))}
-                    className="text-xs px-2 rounded bg-slate-100 hover:bg-slate-200"
+                    onClick={() =>
+                      setReveal((r) => r.map((v, j) => (j === i ? !v : v)))
+                    }
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/70 hover:bg-white border border-white/60 text-slate-700"
+                    title={reveal[i] ? 'Hide' : 'Show'}
                   >
-                    {reveal[i] ? 'Hide' : 'Show'}
+                    {reveal[i] ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
             );
           })}
         </div>
-      </section>
+      </Glass>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <h2 className="font-semibold">Speech synthesis (TTS)</h2>
-        <div className="space-y-2">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="tts"
-              checked={settings.ttsMode === 'browser'}
-              onChange={() => setTtsMode('browser')}
-              className="mt-1"
-            />
-            <div>
-              <div className="text-sm font-medium">Browser TTS</div>
-              <div className="text-xs text-slate-600">
-                No API quota used. Voice quality depends on OS and browser.
-              </div>
-            </div>
-          </label>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="tts"
-              checked={settings.ttsMode === 'gemini'}
-              onChange={() => setTtsMode('gemini')}
-              className="mt-1"
-            />
-            <div>
-              <div className="text-sm font-medium">Gemini TTS (high quality)</div>
-              <div className="text-xs text-slate-600">
-                Natural voice. Uses API quota. Falls back to browser TTS on failure.
-              </div>
-            </div>
-          </label>
+      <Glass>
+        <SectionLabel icon={<Volume2 size={14} />}>Speech synthesis</SectionLabel>
+        <div className="mt-2 space-y-1.5">
+          <Choice
+            checked={settings.ttsMode === 'browser'}
+            onSelect={() => setTtsMode('browser')}
+            title="Browser"
+            note="No API quota used. Quality depends on OS/browser."
+          />
+          <Choice
+            checked={settings.ttsMode === 'gemini'}
+            onSelect={() => setTtsMode('gemini')}
+            title="Gemini"
+            note="Natural voice. Uses API quota. Falls back to browser on failure."
+          />
         </div>
-        <label className="flex items-center gap-2 pt-2 border-t border-slate-100">
+        <label className="mt-2.5 flex items-center gap-2 pt-2 border-t border-white/60">
           <input
             type="checkbox"
             checked={settings.autoPlay}
             onChange={(e) => setAutoPlay(e.target.checked)}
           />
-          <span className="text-sm">Auto-play audio after generating a dialogue</span>
+          <span className="text-sm text-slate-800">Auto-play after generation</span>
         </label>
-      </section>
+      </Glass>
 
-      <section className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
-        <h2 className="font-semibold text-red-900">Data</h2>
-        <p className="text-xs text-red-900">
-          Deletes every API key and dialogue stored in this browser. This cannot be undone.
+      <Glass className="bg-rose-50/70 border-rose-200/70">
+        <SectionLabel icon={<Trash2 size={14} />} className="text-rose-700">
+          Danger zone
+        </SectionLabel>
+        <p className="text-xs text-rose-900 mt-1.5">
+          Deletes every API key and stored item in this browser. Cannot be undone.
         </p>
         <button
           onClick={() => {
             if (confirm('Delete all local data? This cannot be undone.')) clearAll();
           }}
-          className="text-xs px-3 py-1.5 rounded bg-red-600 text-white hover:bg-red-700"
+          className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-rose-600 text-white hover:bg-rose-700"
         >
+          <Trash2 size={13} />
           Delete all data
         </button>
-      </section>
+      </Glass>
     </div>
+  );
+}
+
+function Glass({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`rounded-3xl border border-white/60 bg-white/60 backdrop-blur-xl shadow-sm shadow-slate-900/5 p-4 ${className}`}
+    >
+      {children}
+    </section>
+  );
+}
+
+function SectionLabel({
+  children,
+  icon,
+  className = '',
+}: {
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold text-slate-500 ${className}`}
+    >
+      {icon}
+      {children}
+    </div>
+  );
+}
+
+function Choice({
+  checked,
+  onSelect,
+  title,
+  note,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  title: string;
+  note: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full text-left rounded-2xl border p-2.5 transition ${
+        checked
+          ? 'bg-slate-900 text-white border-slate-900 shadow'
+          : 'bg-white/60 border-white/60 hover:bg-white/80 text-slate-800'
+      }`}
+    >
+      <div className="text-sm font-semibold">{title}</div>
+      <div className={`text-[11px] ${checked ? 'text-white/80' : 'text-slate-500'}`}>{note}</div>
+    </button>
   );
 }
