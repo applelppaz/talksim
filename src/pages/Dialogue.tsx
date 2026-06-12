@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  KeyRound,
   Languages,
   Mic,
   Pause,
@@ -21,10 +19,9 @@ import {
   type SlotSelections,
   type TargetLanguage,
 } from '../types';
-import { evaluatePronunciation, generateDialogue } from '../lib/gemini';
+import { ServerKeyMissingError, evaluatePronunciation, generateDialogue } from '../lib/gemini';
 import { speak, speakSequence, stopSpeaking } from '../lib/tts';
 import { startRecognition, sttSupported, type RecognitionHandle } from '../lib/stt';
-import { hasAnyKey } from '../lib/apiKeyManager';
 import { DialogueLineCard, renderedLineText } from '../components/DialogueLineCard';
 
 const EXAMPLES = [
@@ -62,7 +59,6 @@ export function DialoguePage() {
   const recHandleRef = useRef<RecognitionHandle | null>(null);
   const activeRecLineRef = useRef<string | null>(null);
   const sttOk = sttSupported();
-  const hasKey = hasAnyKey();
 
   useEffect(() => {
     return () => {
@@ -105,10 +101,6 @@ export function DialoguePage() {
       setError('Enter a situation first.');
       return;
     }
-    if (!hasAnyKey()) {
-      setError('Add a Gemini API key in Settings first.');
-      return;
-    }
     setError(null);
     setLoading(true);
     stopSpeaking();
@@ -121,7 +113,11 @@ export function DialoguePage() {
       setSelections({});
       addDialogue(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed.');
+      if (err instanceof ServerKeyMissingError) {
+        setError('Server API key is not set. Open Settings for details.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Generation failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -378,18 +374,6 @@ export function DialoguePage() {
 
   return (
     <div className="space-y-4">
-      {!hasKey && (
-        <Glass className="flex items-center gap-2 text-sm text-amber-900 bg-amber-50/70 border-amber-200/70">
-          <KeyRound size={16} className="text-amber-700" />
-          <span>
-            No API key set.{' '}
-            <Link to="/settings" className="underline">
-              Open Settings
-            </Link>
-          </span>
-        </Glass>
-      )}
-
       <Glass>
         <SectionLabel icon={<Languages size={14} />}>Language</SectionLabel>
         <div className="grid grid-cols-4 gap-1.5 mt-1.5">

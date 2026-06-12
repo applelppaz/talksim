@@ -1,5 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-import { withKeyRotation } from './apiKeyManager';
 import type {
   Correction,
   Difficulty,
@@ -26,29 +24,74 @@ import {
 const CHAT_MODEL = 'gemini-2.5-flash';
 const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 
-function client(apiKey: string): GoogleGenAI {
-  return new GoogleGenAI({ apiKey });
+export class ServerKeyMissingError extends Error {
+  constructor() {
+    super('Server-side GEMINI_API_KEY is not configured. Set it in your hosting environment.');
+    this.name = 'ServerKeyMissingError';
+  }
 }
 
-interface JsonGenOptions {
+interface GenerateBody {
   prompt: string;
   model?: string;
+  responseMimeType?: string;
+  responseModalities?: string[];
+  temperature?: number;
 }
 
-async function generateJson<T>({ prompt, model = CHAT_MODEL }: JsonGenOptions): Promise<T> {
-  return withKeyRotation(async (apiKey) => {
-    const ai = client(apiKey);
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.8,
-      },
-    });
-    const raw = response.text ?? '';
-    return parseJsonLoose<T>(raw);
+interface GenerateResponse {
+  text: string;
+  inlineData: { data?: string; mimeType?: string } | null;
+}
+
+async function callApi(body: GenerateBody): Promise<GenerateResponse> {
+  const response = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    /* ignore */
+  }
+  if (!response.ok) {
+    const errMsg =
+      typeof data === 'object' && data && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : `Request failed: ${response.status}`;
+    if (errMsg.includes('GEMINI_API_KEY is not configured')) {
+      throw new ServerKeyMissingError();
+    }
+    throw new Error(errMsg);
+  }
+  return data as GenerateResponse;
+}
+
+async function checkHealth(): Promise<{ configured: boolean }> {
+  try {
+    const response = await fetch('/api/health');
+    if (!response.ok) return { configured: false };
+    return (await response.json()) as { configured: boolean };
+  } catch {
+    return { configured: false };
+  }
+}
+
+export async function isServerKeyConfigured(): Promise<boolean> {
+  const { configured } = await checkHealth();
+  return configured;
+}
+
+async function generateJson<T>(prompt: string, model: string = CHAT_MODEL): Promise<T> {
+  const { text } = await callApi({
+    prompt,
+    model,
+    responseMimeType: 'application/json',
+    temperature: 0.8,
+  });
+  return parseJsonLoose<T>(text);
 }
 
 function parseJsonLoose<T>(raw: string): T {
@@ -64,6 +107,10 @@ function parseJsonLoose<T>(raw: string): T {
     throw new Error(`Failed to parse AI response as JSON: ${trimmed.slice(0, 120)}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Practice mode: dialogue generation + pronunciation eval
+// ---------------------------------------------------------------------------
 
 interface RawDialogue {
   title?: string;
@@ -84,10 +131,7 @@ export async function generateDialogue(
   language: TargetLanguage,
   difficulty: Difficulty
 ): Promise<Dialogue> {
-  const raw = await generateJson<RawDialogue>({
-    prompt: DIALOGUE_PROMPT(situation, language, difficulty),
-  });
-
+  const raw = await generateJson<RawDialogue>(DIALOGUE_PROMPT(situation, language, difficulty));
   const lines: DialogueLine[] = (raw.lines ?? []).map((line) => ({
     id: uid(),
     speaker: line.speaker?.trim() || '—',
@@ -104,11 +148,9 @@ export async function generateDialogue(
         })),
     })),
   }));
-
   if (lines.length === 0) {
     throw new Error('The model returned no dialogue. Try a more specific situation.');
   }
-
   return {
     id: uid(),
     language,
@@ -137,20 +179,22 @@ export async function evaluatePronunciation(params: {
   transcript: string;
   situation: string;
 }): Promise<PronunciationEval> {
-  const raw = await generateJson<RawEval>({
-    prompt: EVAL_PROMPT(
+  const raw = await generateJson<RawEval>(
+    EVAL_PROMPT(
       params.language,
       params.speaker,
       params.expected,
       params.expectedTranslation,
       params.transcript,
       params.situation
-    ),
-  });
+    )
+  );
   const score = Math.max(0, Math.min(100, Math.round(raw.score ?? 0)));
   const correctedRaw = typeof raw.corrected === 'string' ? raw.corrected.trim() : '';
   const corrected =
-    correctedRaw.length > 0 && correctedRaw.toLowerCase() !== 'null' && correctedRaw !== params.transcript.trim()
+    correctedRaw.length > 0 &&
+    correctedRaw.toLowerCase() !== 'null' &&
+    correctedRaw !== params.transcript.trim()
       ? correctedRaw
       : undefined;
   return {
@@ -167,33 +211,28 @@ export async function evaluatePronunciation(params: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// TTS
+// ---------------------------------------------------------------------------
+
 export async function geminiTts(text: string): Promise<{ data: string; mimeType: string }> {
-  return withKeyRotation(async (apiKey) => {
-    const ai = client(apiKey);
-    const response = await ai.models.generateContent({
-      model: TTS_MODEL,
-      contents: text,
-      config: {
-        responseModalities: ['AUDIO'],
-      },
-    });
-    const part = response.candidates?.[0]?.content?.parts?.[0];
-    const inline = part?.inlineData;
-    if (!inline?.data) {
-      throw new Error('Gemini TTS returned no audio data.');
-    }
-    return { data: inline.data, mimeType: inline.mimeType ?? 'audio/pcm' };
+  const { inlineData } = await callApi({
+    prompt: text,
+    model: TTS_MODEL,
+    responseModalities: ['AUDIO'],
   });
+  if (!inlineData?.data) {
+    throw new Error('Gemini TTS returned no audio data.');
+  }
+  return { data: inlineData.data, mimeType: inlineData.mimeType ?? 'audio/pcm' };
 }
 
 // ---------------------------------------------------------------------------
-// Chat-mode helpers (legacy roleplay chat).
+// Chat mode: roleplay helpers
 // ---------------------------------------------------------------------------
 
 export async function generateOutline(situation: string, lang: TargetLanguage): Promise<string[]> {
-  const result = await generateJson<{ outline: string[] }>({
-    prompt: OUTLINE_PROMPT(situation, lang),
-  });
+  const result = await generateJson<{ outline: string[] }>(OUTLINE_PROMPT(situation, lang));
   return result.outline ?? [];
 }
 
@@ -207,7 +246,7 @@ export async function generateFirstTurn(
   outline: string[],
   lang: TargetLanguage
 ): Promise<AiTurnResult> {
-  return generateJson<AiTurnResult>({ prompt: FIRST_TURN_PROMPT(situation, outline, lang) });
+  return generateJson<AiTurnResult>(FIRST_TURN_PROMPT(situation, outline, lang));
 }
 
 export async function generateNextTurn(
@@ -216,7 +255,7 @@ export async function generateNextTurn(
   lang: TargetLanguage,
   history: Message[]
 ): Promise<AiTurnResult> {
-  return generateJson<AiTurnResult>({ prompt: NEXT_TURN_PROMPT(situation, outline, lang, history) });
+  return generateJson<AiTurnResult>(NEXT_TURN_PROMPT(situation, outline, lang, history));
 }
 
 export interface HelpResult {
@@ -230,7 +269,7 @@ export async function getHelp(
   lang: TargetLanguage,
   history: Message[]
 ): Promise<HelpResult> {
-  return generateJson<HelpResult>({ prompt: HELP_PROMPT(situation, outline, lang, history) });
+  return generateJson<HelpResult>(HELP_PROMPT(situation, outline, lang, history));
 }
 
 export async function answerQuestion(
@@ -239,9 +278,9 @@ export async function answerQuestion(
   targetMessage: Message,
   question: string
 ): Promise<string> {
-  const result = await generateJson<{ answer: string }>({
-    prompt: QUESTION_PROMPT(lang, history, targetMessage, question),
-  });
+  const result = await generateJson<{ answer: string }>(
+    QUESTION_PROMPT(lang, history, targetMessage, question)
+  );
   return result.answer;
 }
 
@@ -250,7 +289,7 @@ export async function checkResponse(
   history: Message[],
   userText: string
 ): Promise<Correction> {
-  return generateJson<Correction>({ prompt: CHECK_PROMPT(lang, history, userText) });
+  return generateJson<Correction>(CHECK_PROMPT(lang, history, userText));
 }
 
 export async function extractVocab(
@@ -260,14 +299,14 @@ export async function extractVocab(
   sessionId: string
 ): Promise<VocabEntry[]> {
   const result = await generateJson<{
-    items: { phrase: string; meaning_ja: string; example?: string }[];
-  }>({ prompt: VOCAB_PROMPT(lang, situation, history) });
+    items: { phrase: string; meaningEn?: string; meaning_ja?: string; example?: string }[];
+  }>(VOCAB_PROMPT(lang, situation, history));
   const now = Date.now();
   return (result.items ?? []).map((it) => ({
     id: uid(),
     language: lang,
     phrase: it.phrase,
-    meaningJa: it.meaning_ja,
+    meaningJa: it.meaningEn ?? it.meaning_ja ?? '',
     example: it.example,
     sourceSessionId: sessionId,
     sourceSituation: situation,

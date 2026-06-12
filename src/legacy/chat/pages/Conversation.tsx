@@ -90,7 +90,7 @@ export function ConversationPage() {
       try {
         await speak(text, session.language, settings.ttsMode, settings.voicePreference);
       } catch (err) {
-        setError(err instanceof Error ? err.message : '音声の再生に失敗しました。');
+        setError(err instanceof Error ? err.message : 'Failed to play audio.');
       }
     },
     [session, settings.ttsMode, settings.voicePreference]
@@ -115,7 +115,7 @@ export function ConversationPage() {
         updateSession((s) => ({ ...s, messages: [...s.messages, message] }));
         void playAiAudio(ai.text);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'AIの応答取得に失敗しました。');
+        setError(err instanceof Error ? err.message : 'Failed to fetch the AI response.');
       } finally {
         setBusy(false);
       }
@@ -156,7 +156,7 @@ export function ConversationPage() {
       });
       void playAiAudio(ai.text);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'AIの応答取得に失敗しました。');
+      setError(err instanceof Error ? err.message : 'Failed to fetch the AI response.');
     } finally {
       setBusy(false);
     }
@@ -172,7 +172,7 @@ export function ConversationPage() {
       const result = await getHelp(session.situation, session.outline, session.language, session.messages);
       setHelpResult(result);
     } catch (err) {
-      setHelpError(err instanceof Error ? err.message : 'ヘルプの取得に失敗しました。');
+      setHelpError(err instanceof Error ? err.message : 'Failed to fetch help.');
     } finally {
       setHelpLoading(false);
     }
@@ -187,7 +187,7 @@ export function ConversationPage() {
       const ans = await answerQuestion(session.language, session.messages, questionTarget, q);
       setQuestionAnswer(ans);
     } catch (err) {
-      setQuestionError(err instanceof Error ? err.message : '回答の取得に失敗しました。');
+      setQuestionError(err instanceof Error ? err.message : 'Failed to fetch the answer.');
     } finally {
       setQuestionLoading(false);
     }
@@ -219,7 +219,7 @@ export function ConversationPage() {
       finalizeSession();
       nav('/chat/vocab', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '会話の終了処理に失敗しました。');
+      setError(err instanceof Error ? err.message : 'Failed to finalize the session.');
       setEndingLoading(false);
     }
   };
@@ -230,26 +230,26 @@ export function ConversationPage() {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl bg-white border border-slate-200 p-3 flex items-center justify-between gap-2">
+      <div className="rounded-3xl border border-white/60 bg-white/60 backdrop-blur-xl p-3 flex items-center justify-between gap-2 shadow-sm shadow-slate-900/5">
         <div className="min-w-0">
-          <div className="text-xs text-slate-500">{langLabel}での会話</div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">{langLabel}</div>
           <div className="text-sm font-medium truncate">{session.situation}</div>
         </div>
         <button
           onClick={handleEnd}
           disabled={endingLoading || session.messages.length === 0}
-          className="shrink-0 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs hover:bg-slate-700 disabled:opacity-50"
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 text-white text-xs hover:bg-slate-800 disabled:opacity-50"
         >
-          {endingLoading ? '語彙を抽出中…' : '会話を終了'}
+          {endingLoading ? 'Wrapping up…' : 'End session'}
         </button>
       </div>
 
       <div
         ref={scrollRef}
-        className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3 min-h-[55vh] max-h-[60vh] overflow-y-auto"
+        className="rounded-3xl border border-white/60 bg-white/45 backdrop-blur-xl p-3 space-y-3 min-h-[55vh] max-h-[60vh] overflow-y-auto shadow-sm shadow-slate-900/5"
       >
         {session.messages.length === 0 && busy && (
-          <div className="text-sm text-slate-500">AIが最初の発話を準備しています…</div>
+          <div className="text-sm text-slate-500">Preparing the first line…</div>
         )}
         {session.messages.map((m) => (
           <MessageBubble
@@ -270,11 +270,11 @@ export function ConversationPage() {
           />
         ))}
         {busy && session.messages.length > 0 && (
-          <div className="text-xs text-slate-500">AIが応答を生成中…</div>
+          <div className="text-xs text-slate-500">Thinking…</div>
         )}
       </div>
 
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      {error && <div className="text-sm text-rose-700">{error}</div>}
 
       <VoiceInput
         language={session.language}

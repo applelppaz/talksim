@@ -1,29 +1,28 @@
-import { useState } from 'react';
-import { Eye, EyeOff, KeyRound, Trash2, Volume2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, Loader2, ShieldAlert, Trash2, Volume2 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import { isServerKeyConfigured } from '../lib/gemini';
 import type { TtsMode } from '../types';
 
-const COOLDOWN_HOURS = 24;
+type KeyStatus = 'unknown' | 'ok' | 'missing';
 
 export function SettingsPage() {
   const { settings, setSettings, clearAll } = useApp();
-  const [reveal, setReveal] = useState<boolean[]>(() => settings.apiKeys.map(() => false));
+  const [keyStatus, setKeyStatus] = useState<KeyStatus>('unknown');
 
-  const updateKey = (index: number, key: string) => {
-    setSettings({
-      ...settings,
-      apiKeys: settings.apiKeys.map((k, i) => (i === index ? { ...k, key } : k)),
-    });
-  };
-
-  const clearExhausted = (index: number) => {
-    setSettings({
-      ...settings,
-      apiKeys: settings.apiKeys.map((k, i) =>
-        i === index ? { ...k, exhaustedAt: undefined } : k
-      ),
-    });
-  };
+  useEffect(() => {
+    let active = true;
+    isServerKeyConfigured()
+      .then((ok) => {
+        if (active) setKeyStatus(ok ? 'ok' : 'missing');
+      })
+      .catch(() => {
+        if (active) setKeyStatus('missing');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const setTtsMode = (mode: TtsMode) => setSettings({ ...settings, ttsMode: mode });
   const setAutoPlay = (autoPlay: boolean) => setSettings({ ...settings, autoPlay });
@@ -31,83 +30,23 @@ export function SettingsPage() {
   return (
     <div className="space-y-4">
       <Glass>
-        <SectionLabel icon={<KeyRound size={14} />}>Gemini API keys</SectionLabel>
-        <p className="text-xs text-slate-600 mt-1.5">
-          Stored only in this browser. When a key hits its daily quota, TalkSim rotates to the next.{' '}
-          <a
-            className="text-sky-700 underline"
-            href="https://aistudio.google.com/apikey"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Get a key
-          </a>
-        </p>
-        <div className="mt-2.5 space-y-1.5">
-          {settings.apiKeys.map((state, i) => {
-            const cooldownRemaining = state.exhaustedAt
-              ? Math.max(
-                  0,
-                  COOLDOWN_HOURS - (Date.now() - state.exhaustedAt) / (1000 * 60 * 60)
-                )
-              : 0;
-            return (
-              <div
-                key={i}
-                className="rounded-2xl border border-white/60 bg-white/60 backdrop-blur p-2.5 space-y-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
-                    Key {i + 1}
-                  </div>
-                  {state.exhaustedAt && cooldownRemaining > 0 && (
-                    <button
-                      onClick={() => clearExhausted(i)}
-                      className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 hover:bg-amber-200"
-                      title="Clear cooldown manually"
-                    >
-                      ~{cooldownRemaining.toFixed(1)}h left
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-1.5 items-center">
-                  <input
-                    type={reveal[i] ? 'text' : 'password'}
-                    value={state.key}
-                    onChange={(e) => updateKey(i, e.target.value)}
-                    placeholder="AIza..."
-                    className="flex-1 rounded-xl border border-white/60 bg-white/70 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-300"
-                  />
-                  <button
-                    onClick={() =>
-                      setReveal((r) => r.map((v, j) => (j === i ? !v : v)))
-                    }
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/70 hover:bg-white border border-white/60 text-slate-700"
-                    title={reveal[i] ? 'Hide' : 'Show'}
-                  >
-                    {reveal[i] ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <KeyStatusRow status={keyStatus} />
       </Glass>
 
       <Glass>
-        <SectionLabel icon={<Volume2 size={14} />}>Speech synthesis</SectionLabel>
-        <div className="mt-2 space-y-1.5">
+        <SectionLabel icon={<Volume2 size={14} />}>Voice</SectionLabel>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
           <Choice
             checked={settings.ttsMode === 'browser'}
             onSelect={() => setTtsMode('browser')}
             title="Browser"
-            note="No API quota used. Quality depends on OS/browser."
+            note="No quota"
           />
           <Choice
             checked={settings.ttsMode === 'gemini'}
             onSelect={() => setTtsMode('gemini')}
             title="Gemini"
-            note="Natural voice. Uses API quota. Falls back to browser on failure."
+            note="Natural"
           />
         </div>
         <label className="mt-2.5 flex items-center gap-2 pt-2 border-t border-white/60">
@@ -122,21 +61,72 @@ export function SettingsPage() {
 
       <Glass className="bg-rose-50/70 border-rose-200/70">
         <SectionLabel icon={<Trash2 size={14} />} className="text-rose-700">
-          Danger zone
+          Reset
         </SectionLabel>
         <p className="text-xs text-rose-900 mt-1.5">
-          Deletes every API key and stored item in this browser. Cannot be undone.
+          Removes saved dialogues, chat history and vocab from this browser.
         </p>
         <button
           onClick={() => {
-            if (confirm('Delete all local data? This cannot be undone.')) clearAll();
+            if (confirm('Delete everything stored on this device?')) clearAll();
           }}
           className="mt-2 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-rose-600 text-white hover:bg-rose-700"
         >
           <Trash2 size={13} />
-          Delete all data
+          Delete local data
         </button>
       </Glass>
+    </div>
+  );
+}
+
+function KeyStatusRow({ status }: { status: KeyStatus }) {
+  if (status === 'unknown') {
+    return (
+      <div className="flex items-center gap-2 text-sm text-slate-600">
+        <Loader2 size={16} className="animate-spin" />
+        Checking API key…
+      </div>
+    );
+  }
+  if (status === 'ok') {
+    return (
+      <div className="flex items-start gap-2 text-sm">
+        <CheckCircle2 size={18} className="text-emerald-600 mt-0.5 shrink-0" />
+        <div>
+          <div className="font-semibold text-slate-900">API key configured</div>
+          <div className="text-xs text-slate-600">
+            <code className="text-[11px] px-1 rounded bg-white/80 border border-white/70">
+              GEMINI_API_KEY
+            </code>{' '}
+            is set on the server. Works on every device that visits this URL.
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <ShieldAlert size={18} className="text-amber-600 mt-0.5 shrink-0" />
+      <div>
+        <div className="font-semibold text-amber-900">API key not set</div>
+        <div className="text-xs text-amber-900/90">
+          Add{' '}
+          <code className="text-[11px] px-1 rounded bg-white/80 border border-white/70">
+            GEMINI_API_KEY
+          </code>{' '}
+          to your Vercel project's Environment Variables. Get a key from{' '}
+          <a
+            className="text-sky-700 underline"
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Google AI Studio
+          </a>
+          .
+        </div>
+      </div>
     </div>
   );
 }
@@ -191,7 +181,7 @@ function Choice({
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full text-left rounded-2xl border p-2.5 transition ${
+      className={`text-left rounded-2xl border p-2.5 transition ${
         checked
           ? 'bg-slate-900 text-white border-slate-900 shadow'
           : 'bg-white/60 border-white/60 hover:bg-white/80 text-slate-800'

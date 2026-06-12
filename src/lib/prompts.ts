@@ -107,101 +107,94 @@ ${userTranscript}
 };
 
 // ---------------------------------------------------------------------------
-// Chat-mode prompts (legacy roleplay chat). Japanese for now.
+// Chat-mode prompts (legacy roleplay chat). English UI; all translations are English.
 // ---------------------------------------------------------------------------
 
-
-function langName(lang: TargetLanguage): string {
+function langLabel(lang: TargetLanguage): string {
   return LANGUAGES[lang].label;
 }
 
 function formatHistory(history: Message[]): string {
-  if (history.length === 0) return '（まだ会話はありません）';
+  if (history.length === 0) return '(no messages yet)';
   return history
     .map((m) => {
-      const who = m.role === 'ai' ? 'AI' : 'ユーザー';
-      const trans = m.translation ? `（日本語: ${m.translation}）` : '';
+      const who = m.role === 'ai' ? 'AI' : 'User';
+      const trans = m.translation ? ` (English: ${m.translation})` : '';
       return `${who}: ${m.text}${trans}`;
     })
     .join('\n');
 }
 
-export const OUTLINE_PROMPT = (situation: string, lang: TargetLanguage) => `あなたは語学学習教材の作成者です。以下のシチュエーションでの${langName(lang)}会話練習の流れを、4〜6個のステップに分けて日本語で出力してください。
+export const OUTLINE_PROMPT = (situation: string, lang: TargetLanguage) => `You are a language-learning material designer. Draft a 4–6 step outline (in English) for a ${langLabel(lang)} conversation practice based on the situation below.
 
-【シチュエーション】
+[Situation]
 ${situation}
 
-各ステップは、誰が何をするか（例：「店員が挨拶し、注文を尋ねる」「客がメニューについて質問する」など）が分かるように簡潔に書いてください。
-JSON形式で出力してください：
-{
-  "outline": ["ステップ1の説明", "ステップ2の説明", ...]
-}`;
+Each step should briefly describe who does what (e.g. "Barista greets and asks for the order", "Customer asks about the menu").
+
+[Output: JSON only.]
+{ "outline": ["Step 1 description", "Step 2 description", ...] }`;
 
 export const FIRST_TURN_PROMPT = (
   situation: string,
   outline: string[],
   lang: TargetLanguage
-) => `あなたは語学学習者の会話練習相手です。以下の設定で、${nativeName(lang)}でロールプレイを開始してください。
+) => `You are the learner's conversation partner. Start the roleplay in ${nativeName(lang)}.
 
-【シチュエーション（日本語）】
+[Situation (English)]
 ${situation}
 
-【会話の流れ】
+[Outline]
 ${outline.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-あなたはユーザー（学習者）の会話相手として、まず最初の発話をしてください。短く自然な発話（1〜2文）にしてください。
-JSON形式で出力してください：
-{
-  "text": "${nativeName(lang)}での発話",
-  "translation": "日本語訳"
-}`;
+Speak first, as the AI character. Keep it short and natural (1–2 sentences).
+
+[Output: JSON only.]
+{ "text": "Your line in ${nativeName(lang)}", "translation": "English translation" }`;
 
 export const NEXT_TURN_PROMPT = (
   situation: string,
   outline: string[],
   lang: TargetLanguage,
   history: Message[]
-) => `あなたは語学学習者の会話練習相手です。${nativeName(lang)}でロールプレイを続けてください。
+) => `You are the learner's conversation partner. Continue the ${nativeName(lang)} roleplay.
 
-【シチュエーション（日本語）】
+[Situation (English)]
 ${situation}
 
-【会話の流れ】
+[Outline]
 ${outline.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-【これまでの会話】
+[History]
 ${formatHistory(history)}
 
-ユーザーの直前の発話に対して、自然な応答を${nativeName(lang)}で1〜2文返してください。会話の流れに沿って進めてください。
-JSON形式で出力してください：
-{
-  "text": "${nativeName(lang)}での発話",
-  "translation": "日本語訳"
-}`;
+Reply to the user's last message in 1–2 natural ${nativeName(lang)} sentences, following the outline.
+
+[Output: JSON only.]
+{ "text": "Your line in ${nativeName(lang)}", "translation": "English translation" }`;
 
 export const HELP_PROMPT = (
   situation: string,
   outline: string[],
   lang: TargetLanguage,
   history: Message[]
-) => `あなたは語学学習のアドバイザーです。学習者が次に何と言えばよいか分からない状況です。
+) => `You are a language tutor. The learner is unsure what to say next.
 
-【シチュエーション】
+[Situation]
 ${situation}
 
-【会話の流れ】
+[Outline]
 ${outline.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
-【これまでの会話】
+[History]
 ${formatHistory(history)}
 
-学習者が次に言うべき内容について、${nativeName(lang)}での例文を1〜2つと、その日本語訳、使い方や注意点の解説を日本語で出力してください。
-JSON形式で出力してください：
+Produce 1–2 ${nativeName(lang)} sample lines the learner could say next, with English translations and a short English explanation (what they're trying to do, register tips, common pitfalls).
+
+[Output: JSON only.]
 {
-  "suggestions": [
-    { "text": "例文（${nativeName(lang)}）", "translation": "日本語訳" }
-  ],
-  "explanation": "日本語での解説（場面で言うべき内容、表現のポイント、注意点）"
+  "suggestions": [{ "text": "${nativeName(lang)} sample line", "translation": "English translation" }],
+  "explanation": "English explanation"
 }`;
 
 export const QUESTION_PROMPT = (
@@ -209,69 +202,68 @@ export const QUESTION_PROMPT = (
   history: Message[],
   targetMessage: Message,
   question: string
-) => `あなたは語学学習のサポート役です。学習者がAIの発話について質問しています。
+) => `You are a language tutor. The learner asked a question about an AI line.
 
-【会話履歴】
+[History]
 ${formatHistory(history)}
 
-【質問対象のAI発話】
-${targetMessage.text}（${nativeName(lang)}）
-日本語訳: ${targetMessage.translation ?? '（未取得）'}
+[AI line in question]
+${targetMessage.text} (${nativeName(lang)})
+English: ${targetMessage.translation ?? '(not provided)'}
 
-【学習者の質問（日本語）】
+[Learner's question]
 ${question}
 
-質問に対して、日本語で丁寧に分かりやすく回答してください。文法・語彙・文化的背景など、必要に応じて触れてください。
-JSON形式で出力してください：
-{
-  "answer": "日本語での回答"
-}`;
+Answer clearly in English. Touch on grammar, vocabulary, or cultural background as needed.
+
+[Output: JSON only.]
+{ "answer": "English answer" }`;
 
 export const CHECK_PROMPT = (
   lang: TargetLanguage,
   history: Message[],
   userText: string
-) => `あなたは${nativeName(lang)}の語学講師です。学習者の発話に、文法的・語法的・自然さの観点で問題がないか確認してください。
+) => `You are a ${nativeName(lang)} tutor. Check the learner's utterance for grammar, usage, and naturalness.
 
-【会話の流れ（直近の履歴）】
+[Recent history]
 ${formatHistory(history.slice(-6))}
 
-【学習者の発話】
+[Learner's utterance]
 ${userText}
 
-判定基準：
-- 軽微なタイポや句読点は無視してください。
-- 文法的に正しく、その場面で自然であればOKとしてください。
-- 問題がある場合は、何が問題かを日本語で具体的に指摘し、より自然な表現を提示してください。
+Rules:
+- Ignore minor typos and punctuation.
+- If grammatical and natural in context, mark ok=true.
+- Otherwise, list concrete issues in English and offer a more natural ${nativeName(lang)} version.
 
-JSON形式で出力してください：
+[Output: JSON only.]
 {
-  "ok": true または false,
-  "issues": ["問題点1（日本語）", "問題点2（日本語）", ...],
-  "improved": "より自然な${nativeName(lang)}での言い方（問題がない場合は省略可）",
-  "comment": "学習者へのコメント（日本語、1〜2文）"
+  "ok": true or false,
+  "issues": ["Issue 1 in English", "Issue 2 in English", ...],
+  "improved": "More natural ${nativeName(lang)} version (omit if ok)",
+  "comment": "1–2 sentence English comment for the learner"
 }`;
 
-export const VOCAB_PROMPT = (lang: TargetLanguage, situation: string, history: Message[]) => `あなたは語学学習教材の編集者です。以下の${nativeName(lang)}会話練習から、学習価値の高いフレーズや語彙を5〜15個抽出してください。
+export const VOCAB_PROMPT = (lang: TargetLanguage, situation: string, history: Message[]) => `You are a language-learning editor. Extract 5–15 high-value phrases or vocabulary items from the ${nativeName(lang)} conversation below.
 
-【シチュエーション】
+[Situation]
 ${situation}
 
-【会話】
+[Conversation]
 ${formatHistory(history)}
 
-抽出基準：
-- 場面で使える定型表現や応用が利く表現を優先
-- 学習者にとって役立つ語彙・コロケーション
-- 過度に簡単なもの（hello, yes, no など）は除外
+Selection criteria:
+- Prefer fixed expressions and phrases that transfer to other situations.
+- Useful collocations and vocabulary for the learner.
+- Skip very basic items (hello, yes, no).
 
-JSON形式で出力してください：
+[Output: JSON only.]
 {
   "items": [
     {
-      "phrase": "${nativeName(lang)}でのフレーズ",
-      "meaning_ja": "日本語訳",
-      "example": "実際の使用例（${nativeName(lang)}、会話中の例または応用例）"
+      "phrase": "${nativeName(lang)} phrase",
+      "meaningEn": "English meaning",
+      "example": "Usage example in ${nativeName(lang)} (from the chat or applied to a new context)"
     }
   ]
 }`;

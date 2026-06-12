@@ -114,6 +114,7 @@ export interface VocabEntry {
   id: string;
   language: TargetLanguage;
   phrase: string;
+  /** Short English meaning. Field stays named `meaningJa` for storage backward-compat. */
   meaningJa: string;
   example?: string;
   sourceSessionId?: string;
@@ -125,14 +126,7 @@ export interface VocabEntry {
 
 export type TtsMode = 'browser' | 'gemini';
 
-export interface ApiKeyState {
-  key: string;
-  exhaustedAt?: number;
-  label?: string;
-}
-
 export interface AppSettings {
-  apiKeys: ApiKeyState[];
   ttsMode: TtsMode;
   autoPlay: boolean;
   difficulty: Difficulty;

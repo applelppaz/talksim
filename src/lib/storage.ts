@@ -17,7 +17,6 @@ const KEYS = {
 } as const;
 
 const DEFAULT_SETTINGS: AppSettings = {
-  apiKeys: [{ key: '' }, { key: '' }, { key: '' }],
   ttsMode: 'browser',
   autoPlay: true,
   difficulty: 'intermediate',
@@ -53,7 +52,6 @@ function write<T>(key: string, value: T): void {
 export const storage = {
   loadSettings(): AppSettings {
     const s = read<AppSettings>(KEYS.settings, DEFAULT_SETTINGS);
-    while (s.apiKeys.length < 3) s.apiKeys.push({ key: '' });
     if (typeof s.autoPlay !== 'boolean') s.autoPlay = true;
     if (!isTtsMode(s.ttsMode)) s.ttsMode = 'browser';
     if (!isDifficulty(s.difficulty)) s.difficulty = 'intermediate';
