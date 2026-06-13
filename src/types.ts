@@ -28,6 +28,10 @@ export const DIFFICULTIES: Record<Difficulty, { label: string; hint: string }> =
   },
 };
 
+export type AppMode = 'practice' | 'chat';
+
+// --- Practice mode (current dialogue-generation app) ---
+
 export interface VocabAlternative {
   text: string;
   translation: string;
@@ -70,22 +74,62 @@ export interface PronunciationEval {
   summary: string;
   issues: EvalIssue[];
   suggestion?: string;
+  /** A corrected version of what the learner actually said, when their utterance has grammar or usage errors. */
+  corrected?: string;
   transcript: string;
   expected: string;
 }
 
-export type TtsMode = 'browser' | 'gemini';
+// --- Chat mode (legacy roleplay chat) ---
 
-export interface ApiKeyState {
-  key: string;
-  exhaustedAt?: number;
-  label?: string;
+export type MessageRole = 'ai' | 'user';
+
+export interface Message {
+  id: string;
+  role: MessageRole;
+  text: string;
+  translation?: string;
+  correction?: Correction;
+  createdAt: number;
 }
 
+export interface Correction {
+  ok: boolean;
+  issues: string[];
+  improved?: string;
+  comment?: string;
+}
+
+export interface ConversationSession {
+  id: string;
+  language: TargetLanguage;
+  situation: string;
+  outline: string[];
+  messages: Message[];
+  startedAt: number;
+  endedAt?: number;
+}
+
+export interface VocabEntry {
+  id: string;
+  language: TargetLanguage;
+  phrase: string;
+  /** Short English meaning. Field stays named `meaningJa` for storage backward-compat. */
+  meaningJa: string;
+  example?: string;
+  sourceSessionId?: string;
+  sourceSituation?: string;
+  createdAt: number;
+}
+
+// --- Shared ---
+
+export type TtsMode = 'browser' | 'gemini';
+
 export interface AppSettings {
-  apiKeys: ApiKeyState[];
   ttsMode: TtsMode;
   autoPlay: boolean;
   difficulty: Difficulty;
+  mode: AppMode;
   voicePreference?: string;
 }

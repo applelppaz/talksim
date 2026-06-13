@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Languages,
+  Mic,
+  Pause,
+  Play,
+  RotateCcw,
+  Sparkles,
+  StopCircle,
+  Wand2,
+} from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import {
   DIFFICULTIES,
@@ -10,10 +19,9 @@ import {
   type SlotSelections,
   type TargetLanguage,
 } from '../types';
-import { evaluatePronunciation, generateDialogue } from '../lib/gemini';
+import { ServerKeyMissingError, evaluatePronunciation, generateDialogue } from '../lib/gemini';
 import { speak, speakSequence, stopSpeaking } from '../lib/tts';
 import { startRecognition, sttSupported, type RecognitionHandle } from '../lib/stt';
-import { hasAnyKey } from '../lib/apiKeyManager';
 import { DialogueLineCard, renderedLineText } from '../components/DialogueLineCard';
 
 const EXAMPLES = [
@@ -21,9 +29,9 @@ const EXAMPLES = [
   'Checking in luggage at an airport counter. You want a window seat.',
   'Checking in at a hotel front desk. Asking about Wi-Fi and breakfast hours.',
   'Lost in a foreign city. Asking a passerby for the way to the nearest station.',
-  'Meeting a new coworker for the first time. Small talk about hometowns and hobbies.',
+  'Meeting a new coworker. Small talk about hometowns and hobbies.',
   'Ordering at a restaurant and asking about food allergies.',
-  'A job interview at a tech company. Discussing past projects and salary expectations.',
+  'A job interview at a tech company. Discussing past projects and salary.',
   'Negotiating the price of a used car with a private seller.',
 ];
 
@@ -42,7 +50,6 @@ export function DialoguePage() {
   const [playingAll, setPlayingAll] = useState(false);
   const autoPlayedFor = useRef<string | null>(null);
 
-  // Practice state
   const [selfSpeaker, setSelfSpeaker] = useState<string | null>(null);
   const [practicing, setPracticing] = useState(false);
   const [activeLineIdx, setActiveLineIdx] = useState<number | null>(null);
@@ -53,8 +60,6 @@ export function DialoguePage() {
   const activeRecLineRef = useRef<string | null>(null);
   const sttOk = sttSupported();
 
-  const hasKey = hasAnyKey();
-
   useEffect(() => {
     return () => {
       stopSpeaking();
@@ -62,7 +67,6 @@ export function DialoguePage() {
     };
   }, []);
 
-  // Persist difficulty as user's last-used preference
   const setDifficulty = useCallback(
     (d: Difficulty) => {
       setDifficultyLocal(d);
@@ -71,7 +75,6 @@ export function DialoguePage() {
     [settings, setSettings]
   );
 
-  // Reset role/eval state on new dialogue
   useEffect(() => {
     if (!dialogue) return;
     const first = dialogue.lines[0]?.speaker ?? null;
@@ -95,11 +98,7 @@ export function DialoguePage() {
 
   const handleGenerate = useCallback(async () => {
     if (!situation.trim()) {
-      setError('Please enter a situation.');
-      return;
-    }
-    if (!hasAnyKey()) {
-      setError('No Gemini API key is set. Register one in Settings.');
+      setError('Enter a situation first.');
       return;
     }
     setError(null);
@@ -114,7 +113,11 @@ export function DialoguePage() {
       setSelections({});
       addDialogue(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate dialogue.');
+      if (err instanceof ServerKeyMissingError) {
+        setError('Server API key is not set. Open Settings for details.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Generation failed.');
+      }
     } finally {
       setLoading(false);
     }
@@ -154,7 +157,6 @@ export function DialoguePage() {
     }
   }, [dialogue, selections, settings.ttsMode, settings.voicePreference]);
 
-  // Auto-play once after generation if enabled
   useEffect(() => {
     if (!dialogue) return;
     if (!settings.autoPlay) return;
@@ -211,8 +213,6 @@ export function DialoguePage() {
     setSelections({});
   };
 
-  // --- recording / evaluation ---
-
   const stopAnyRecording = useCallback(() => {
     if (recHandleRef.current) {
       recHandleRef.current.cancel();
@@ -260,7 +260,7 @@ export function DialoguePage() {
       if (!sttOk) {
         setRecErrors((prev) => ({
           ...prev,
-          [lineId]: 'Speech recognition is not available in this browser (Chrome or Edge recommended).',
+          [lineId]: 'Speech recognition is unavailable in this browser (use Chrome or Edge).',
         }));
         return;
       }
@@ -303,12 +303,10 @@ export function DialoguePage() {
     [dialogue, sttOk, stopAnyRecording, runEvaluation]
   );
 
-  // --- guided practice flow ---
-
   const startPractice = useCallback(() => {
     if (!dialogue) return;
     if (!selfSpeaker) {
-      setError('Pick a role to practice as.');
+      setError('Pick a role first.');
       return;
     }
     setError(null);
@@ -339,12 +337,11 @@ export function DialoguePage() {
     });
   }, [dialogue]);
 
-  // Drive the guided practice loop: play AI lines automatically.
   useEffect(() => {
     if (!practicing || !dialogue || activeLineIdx === null) return;
     const line = dialogue.lines[activeLineIdx];
     if (!line) return;
-    if (userOwnsLine(line.speaker)) return; // wait for user
+    if (userOwnsLine(line.speaker)) return;
 
     let cancelled = false;
     const text = renderedLineText(line, selections[line.id] ?? {});
@@ -376,50 +373,41 @@ export function DialoguePage() {
   ]);
 
   return (
-    <div className="space-y-5">
-      {!hasKey && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          No API key set.{' '}
-          <Link to="/settings" className="underline hover:text-amber-700">
-            Open Settings
-          </Link>{' '}
-          to register a Gemini API key.
-        </div>
-      )}
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div className="space-y-4">
+      <Glass>
+        <SectionLabel icon={<Languages size={14} />}>Language</SectionLabel>
+        <div className="grid grid-cols-4 gap-1.5 mt-1.5">
           {(Object.keys(LANGUAGES) as TargetLanguage[]).map((k) => (
             <button
               key={k}
               onClick={() => setLanguage(k)}
-              className={`rounded-lg border-2 px-3 py-2 text-left transition ${
+              className={`px-2 py-1.5 rounded-xl text-xs font-medium transition border ${
                 language === k
-                  ? 'border-sky-500 bg-sky-50'
-                  : 'border-slate-200 hover:border-slate-400'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow'
+                  : 'bg-white/60 text-slate-700 border-white/60 hover:bg-white/80'
               }`}
             >
-              <div className="text-sm font-semibold">{LANGUAGES[k].label}</div>
-              <div className="text-[11px] text-slate-500">{LANGUAGES[k].nativeName}</div>
+              <div className="leading-none">{LANGUAGES[k].label}</div>
+              <div className="text-[10px] opacity-70 mt-0.5">{LANGUAGES[k].nativeName}</div>
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <SectionLabel icon={<Sparkles size={14} />} className="mt-3">Difficulty</SectionLabel>
+        <div className="grid grid-cols-4 gap-1.5 mt-1.5">
           {(Object.keys(DIFFICULTIES) as Difficulty[]).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setDifficulty(k)}
-              className={`rounded-lg border px-3 py-2 text-left transition ${
-                difficulty === k
-                  ? 'border-violet-500 bg-violet-50'
-                  : 'border-slate-200 hover:border-slate-400'
-              }`}
               title={DIFFICULTIES[k].hint}
+              className={`px-2 py-1.5 rounded-xl text-xs font-medium transition border ${
+                difficulty === k
+                  ? 'bg-violet-600 text-white border-violet-600 shadow'
+                  : 'bg-white/60 text-slate-700 border-white/60 hover:bg-white/80'
+              }`}
             >
-              <div className="text-sm font-semibold">{DIFFICULTIES[k].label}</div>
-              <div className="text-[11px] text-slate-500 line-clamp-2">{DIFFICULTIES[k].hint}</div>
+              {DIFFICULTIES[k].label}
             </button>
           ))}
         </div>
@@ -429,11 +417,11 @@ export function DialoguePage() {
           value={situation}
           onChange={(e) => setSituation(e.target.value)}
           placeholder="Describe the situation in English…"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+          className="mt-3 w-full rounded-2xl border border-white/60 bg-white/60 backdrop-blur px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 placeholder:text-slate-400"
         />
-        <details className="text-xs text-slate-600">
+        <details className="text-xs text-slate-600 mt-1.5">
           <summary className="cursor-pointer hover:text-slate-900">Examples</summary>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-1.5 space-y-1">
             {EXAMPLES.map((ex) => (
               <li key={ex}>
                 <button
@@ -448,67 +436,74 @@ export function DialoguePage() {
           </ul>
         </details>
 
-        <div className="flex items-center gap-2 justify-end">
-          {error && <span className="text-xs text-red-600 mr-auto">{error}</span>}
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={loading || !situation.trim()}
-            className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold disabled:opacity-50"
-          >
-            {loading ? 'Generating…' : dialogue ? 'Generate again' : 'Generate'}
-          </button>
-        </div>
-      </section>
+        {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
+
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={loading || !situation.trim()}
+          className="mt-3 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-br from-sky-500 to-violet-500 hover:brightness-110 text-white text-sm font-semibold disabled:opacity-50 shadow-lg shadow-sky-300/50"
+        >
+          {loading ? (
+            <>
+              <Wand2 size={18} className="animate-pulse" />
+              Generating…
+            </>
+          ) : (
+            <>
+              <Wand2 size={18} />
+              {dialogue ? 'Generate again' : 'Generate dialogue'}
+            </>
+          )}
+        </button>
+      </Glass>
 
       {dialogue && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <header className="flex items-center justify-between gap-2 flex-wrap">
+        <Glass>
+          <header className="flex items-start justify-between gap-2 flex-wrap">
             <div className="min-w-0">
-              <div className="text-[11px] text-slate-500">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">
                 {LANGUAGES[dialogue.language].label} · {DIFFICULTIES[dialogue.difficulty].label} ·{' '}
                 {dialogue.lines.length} lines
               </div>
-              <h2 className="font-bold truncate">{dialogue.title}</h2>
+              <h2 className="font-bold truncate text-slate-900">{dialogue.title}</h2>
               <p className="text-xs text-slate-500 truncate">{dialogue.situation}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               {playingAll || playingLineId ? (
-                <button
-                  type="button"
+                <IconChip
                   onClick={() => {
                     stopSpeaking();
                     setPlayingAll(false);
                     setPlayingLineId(null);
                   }}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+                  tone="danger"
+                  title="Stop"
                 >
-                  ■ Stop
-                </button>
+                  <Pause size={15} />
+                </IconChip>
               ) : (
-                <button
-                  type="button"
+                <IconChip
                   onClick={() => void playAll()}
                   disabled={practicing}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                  tone="primary"
+                  title="Play all"
                 >
-                  ▶ Play all
-                </button>
+                  <Play size={15} />
+                </IconChip>
               )}
-              <button
-                type="button"
+              <IconChip
                 onClick={resetSelections}
                 disabled={Object.keys(selections).length === 0}
-                className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                title="Reset swaps"
               >
-                Reset swaps
-              </button>
+                <RotateCcw size={15} />
+              </IconChip>
             </div>
           </header>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-            <div className="flex items-center flex-wrap gap-2">
-              <span className="text-xs font-semibold text-slate-700 mr-1">Your role:</span>
+          <div className="mt-3 rounded-2xl border border-white/60 bg-white/45 backdrop-blur p-2.5">
+            <div className="flex items-center flex-wrap gap-1.5">
               {speakers.map((s) => (
                 <button
                   key={s}
@@ -518,13 +513,12 @@ export function DialoguePage() {
                     setSelfSpeaker(s);
                   }}
                   disabled={practicing}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                  className={`text-xs px-3 py-1 rounded-full border transition ${
                     selfSpeaker === s
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold'
-                      : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'
+                      ? 'border-emerald-500 bg-emerald-50/80 text-emerald-900 font-semibold'
+                      : 'border-white/60 bg-white/60 text-slate-700 hover:bg-white/80'
                   } ${practicing ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                  {selfSpeaker === s ? '● ' : ''}
                   {s}
                 </button>
               ))}
@@ -535,43 +529,46 @@ export function DialoguePage() {
                   setSelfSpeaker(null);
                 }}
                 disabled={practicing}
-                className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                className={`text-xs px-3 py-1 rounded-full border transition ${
                   selfSpeaker === null
                     ? 'border-slate-700 bg-slate-200 text-slate-900 font-semibold'
-                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'
+                    : 'border-white/60 bg-white/60 text-slate-700 hover:bg-white/80'
                 } ${practicing ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 Listen only
               </button>
+
               <div className="ml-auto">
                 {practicing ? (
                   <button
                     type="button"
                     onClick={stopPractice}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-rose-600 text-white hover:bg-rose-700 shadow"
                   >
-                    ■ Stop practice
+                    <StopCircle size={14} />
+                    Stop
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={startPractice}
                     disabled={!selfSpeaker}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 shadow"
                   >
-                    🎙 Start role-play
+                    <Mic size={14} />
+                    Practice
                   </button>
                 )}
               </div>
             </div>
             {!sttOk && selfSpeaker && (
-              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                Speech recognition is unavailable in this browser. Use Chrome or Edge for pronunciation feedback.
+              <div className="mt-1.5 text-[11px] text-amber-700">
+                Speech recognition is unavailable in this browser. Use Chrome or Edge for feedback.
               </div>
             )}
           </div>
 
-          <div className="space-y-2">
+          <div className="mt-3 space-y-2">
             {dialogue.lines.map((line, i) => (
               <DialogueLineCard
                 key={line.id}
@@ -605,36 +602,100 @@ export function DialoguePage() {
               />
             ))}
           </div>
-        </section>
+        </Glass>
       )}
 
       {dialogues.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-          <h2 className="font-semibold text-sm">Recent dialogues</h2>
-          <ul className="space-y-1.5">
+        <Glass>
+          <SectionLabel>Recent dialogues</SectionLabel>
+          <ul className="mt-1.5 space-y-1.5">
             {dialogues.slice(0, 8).map((d) => (
               <li key={d.id}>
                 <button
                   type="button"
                   onClick={() => loadFromHistory(d)}
-                  className="w-full text-left rounded-lg border border-slate-200 hover:border-sky-400 hover:bg-sky-50 px-3 py-2 transition"
+                  className="w-full text-left rounded-xl border border-white/60 bg-white/55 hover:bg-white/80 backdrop-blur-sm px-3 py-2 transition"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-900/85 text-white">
                       {LANGUAGES[d.language].label}
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-800">
                       {DIFFICULTIES[d.difficulty].label}
                     </span>
-                    <span className="text-sm font-medium truncate">{d.title}</span>
+                    <span className="text-sm font-medium truncate text-slate-900">{d.title}</span>
                   </div>
                   <div className="text-xs text-slate-500 truncate">{d.situation}</div>
                 </button>
               </li>
             ))}
           </ul>
-        </section>
+        </Glass>
       )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Small UI primitives used by this page.
+// ---------------------------------------------------------------------------
+
+function Glass({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <section
+      className={`rounded-3xl border border-white/60 bg-white/60 backdrop-blur-xl shadow-sm shadow-slate-900/5 p-4 ${className}`}
+    >
+      {children}
+    </section>
+  );
+}
+
+function SectionLabel({
+  children,
+  icon,
+  className = '',
+}: {
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold text-slate-500 ${className}`}>
+      {icon}
+      {children}
+    </div>
+  );
+}
+
+function IconChip({
+  children,
+  onClick,
+  disabled,
+  title,
+  tone = 'neutral',
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  tone?: 'neutral' | 'primary' | 'danger';
+}) {
+  const toneClass =
+    tone === 'primary'
+      ? 'bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50'
+      : tone === 'danger'
+      ? 'bg-rose-600 text-white hover:bg-rose-700'
+      : 'bg-white/70 text-slate-700 hover:bg-white border border-white/60 disabled:opacity-50';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex items-center justify-center w-8 h-8 rounded-full shadow-sm ${toneClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+

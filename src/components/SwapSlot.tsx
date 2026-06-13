@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { DialogueSlot } from '../types';
 
 interface Props {
@@ -38,21 +39,21 @@ export function SwapSlot({ slot, selected, onSelect }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-baseline gap-0.5 px-1.5 py-0.5 rounded-md border text-base leading-snug transition ${
+        className={`inline-flex items-baseline gap-0.5 px-1.5 py-0.5 rounded-xl border text-base leading-snug transition ${
           selected === -1
-            ? 'border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100'
-            : 'border-emerald-400 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
+            ? 'border-sky-300/70 bg-sky-50/80 text-sky-900 hover:bg-sky-100/80'
+            : 'border-emerald-400/70 bg-emerald-50/80 text-emerald-900 hover:bg-emerald-100/80'
         }`}
         title={currentTranslation}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className="font-semibold">{currentText}</span>
-        <span className="text-[10px] text-slate-500">▼</span>
+        <ChevronDown size={11} className="text-slate-500" />
       </button>
       {open && (
-        <span className="absolute z-20 mt-1 left-0 min-w-[14rem] max-w-[20rem] max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl text-sm">
-          <span className="block px-3 py-1.5 text-[10px] uppercase tracking-wide text-slate-500 bg-slate-50 border-b">
+        <span className="absolute z-20 mt-1 left-0 min-w-[14rem] max-w-[20rem] max-h-72 overflow-y-auto rounded-2xl border border-white/70 bg-white/90 backdrop-blur-xl shadow-xl text-sm">
+          <span className="block px-3 py-1.5 text-[10px] uppercase tracking-wide text-slate-500 bg-white/60 border-b border-white/70">
             Swap options ({slot.alternatives.length + 1})
           </span>
           <Option
